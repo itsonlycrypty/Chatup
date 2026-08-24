@@ -1,3 +1,9 @@
+const withTM = require('next-transpile-modules')([
+  '@firebase',
+  'firebase',
+  'undici',
+]);
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -6,7 +12,6 @@ const nextConfig = {
   experimental: {
     esmExternals: 'loose',
   },
-  transpilePackages: ['@firebase', 'firebase', 'undici'],
 };
 
-module.exports = nextConfig;
+module.exports = withTM(nextConfig);
