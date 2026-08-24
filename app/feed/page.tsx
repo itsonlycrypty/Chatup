@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, increment } from 'firebase/firestore';
 import Image from 'next/image';
-import { Heart } from 'lucide-react';
 
 interface Post {
   id: string;
@@ -43,11 +42,11 @@ export default function Feed() {
           <div className="p-3">
             <p className="text-sm">{post.text}</p>
             <button onClick={() => handleLike(post.id)} className="flex items-center gap-2 mt-2 text-red-400">
-              <Heart size={20} /> {post.likes || 0}
+              ❤️ {post.likes || 0}
             </button>
           </div>
         </div>
       ))}
     </div>
   );
-  }
+          }
