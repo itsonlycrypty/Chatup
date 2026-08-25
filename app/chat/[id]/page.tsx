@@ -1,75 +1,81 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useParams } from 'next/navigation';
+import Link from 'next/link';
+import { FaUserCircle, FaSearch } from 'react-icons/fa';
+import Image from 'next/image';
 
-export default function ChatRoom() {
-  const { id } = useParams();
+export default function ChatList() {
   const { user } = useAuth();
-  const [messages, setMessages] = useState<any[]>([]);
-  const [text, setText] = useState('');
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  const getChatId = (a: string, b: string) => [a, b].sort().join('_');
-
-  const loadMessages = () => {
-    if (!user || !id) return;
-    const chatId = getChatId(user.id, id as string);
-    const chats = JSON.parse(localStorage.getItem('chatup_chats') || '{}');
-    setMessages(chats[chatId] || []);
-  };
+  const [users, setUsers] = useState<any[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    loadMessages();
-    const interval = setInterval(loadMessages, 2000);
-    return () => clearInterval(interval);
-  }, [id, user]);
+    const allUsers = JSON.parse(localStorage.getItem('chatup_users') || '[]');
+    const others = allUsers.filter((u: any) => u.id !== user?.id);
+    setUsers(others);
+    setFilteredUsers(others);
+  }, [user]);
 
-  const send = async () => {
-    if (!text.trim() || !user || !id) return;
-    const chatId = getChatId(user.id, id as string);
-    const chats = JSON.parse(localStorage.getItem('chatup_chats') || '{}');
-    if (!chats[chatId]) chats[chatId] = [];
-    const msg = { 
-      id: Date.now().toString(), 
-      senderId: user.id, 
-      text, 
-      timestamp: new Date().toISOString() 
-    };
-    chats[chatId].push(msg);
-    localStorage.setItem('chatup_chats', JSON.stringify(chats));
-    setText('');
-    loadMessages();
+  const handleSearch = (term: string) => {
+    setSearchTerm(term);
+    if (term.trim() === '') {
+      setFilteredUsers(users);
+    } else {
+      const filtered = users.filter((u: any) =>
+        u.username?.toLowerCase().includes(term.toLowerCase()) ||
+        u.displayName?.toLowerCase().includes(term.toLowerCase()) ||
+        u.email?.toLowerCase().includes(term.toLowerCase())
+      );
+      setFilteredUsers(filtered);
+    }
   };
 
   return (
-    <div className="p-4 h-[85vh] flex flex-col pb-24">
-      <h2 className="text-xl font-bold text-white mb-4">Chat</h2>
-      <div className="flex-1 overflow-y-auto space-y-2">
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            className={`p-2 rounded max-w-[70%] ${
-              m.senderId === user?.id ? 'bg-blue-600 ml-auto' : 'bg-gray-700'
-            }`}
-          >
-            {m.text}
-          </div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
-      <div className="flex gap-2 mt-4">
+    <div className="p-4 pb-24 min-h-screen bg-black">
+      <h1 className="text-2xl font-bold text-white mb-6">Chats</h1>
+
+      {/* Search Bar */}
+      <div className="relative mb-4">
+        <FaSearch className="absolute left-3 top-3 text-gray-400" />
         <input
-          className="flex-1 bg-gray-800 text-white p-3 rounded-xl"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && send()}
-          placeholder="Type a message..."
+          className="w-full bg-gray-800 text-white pl-10 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Search by username or name..."
+          value={searchTerm}
+          onChange={(e) => handleSearch(e.target.value)}
         />
-        <button onClick={send} className="bg-blue-600 px-6 rounded-xl">
-          Send
-        </button>
       </div>
+
+      {filteredUsers.length === 0 ? (
+        <p className="text-gray-400 text-center mt-10">
+          {searchTerm ? 'No users found' : 'No other users'}
+        </p>
+      ) : (
+        filteredUsers.map((u) => (
+          <Link
+            key={u.id}
+            href={`/chat/${u.id}`}
+            className="flex items-center gap-4 bg-gray-800 hover:bg-gray-700 p-4 rounded-2xl mb-3 transition"
+          >
+            {u.photoURL ? (
+              <Image
+                src={u.photoURL}
+                alt="Avatar"
+                width={40}
+                height={40}
+                className="w-10 h-10 rounded-full object-cover"
+              />
+            ) : (
+              <FaUserCircle size={40} className="text-gray-400" />
+            )}
+            <div>
+              <p className="text-white font-semibold">{u.displayName || u.email}</p>
+              <p className="text-gray-400 text-sm">@{u.username || ''}</p>
+            </div>
+          </Link>
+        ))
+      )}
     </div>
   );
-      }
+    }
