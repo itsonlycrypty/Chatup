@@ -21,7 +21,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(false);
   }, []);
 
-  const login = (email: string, pin: string) => {
+  const login = async (email: string, pin: string): Promise<void> => {
     const users = JSON.parse(localStorage.getItem('chatup_users') || '[]');
     let found = users.find((u: any) => u.email === email);
 
