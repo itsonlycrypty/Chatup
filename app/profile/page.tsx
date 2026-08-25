@@ -1,11 +1,14 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { storage, db } from '@/lib/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db } from '@/lib/firebase';
 import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import Image from 'next/image';
 import { FaCamera, FaSignOutAlt, FaEnvelope, FaLock, FaEye, FaEyeSlash } from 'react-icons/fa';
+
+// ✅ Same Cloudinary credentials
+const CLOUD_NAME = 'jtdafdgp';
+const UPLOAD_PRESET = 'chatup';
 
 export default function Profile() {
   const { user, loading, login, signup, logout } = useAuth();
@@ -15,6 +18,7 @@ export default function Profile() {
   const [photoURL, setPhotoURL] = useState<string>('');
   const [displayName, setDisplayName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Load user profile data
@@ -36,19 +40,32 @@ export default function Profile() {
     }
   }, [user]);
 
+  const uploadToCloudinary = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', UPLOAD_PRESET);
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/upload`,
+      { method: 'POST', body: formData }
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || 'Upload failed');
+    return data.secure_url;
+  };
+
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
-    if (!storage || !db) return alert('Firebase not initialized');
+    if (!db) return alert('Firebase not initialized');
+    setUploading(true);
     try {
-      const storageRef = ref(storage!, `profiles/${user.uid}`);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
+      const url = await uploadToCloudinary(file);
       await updateDoc(doc(db!, 'users', user.uid), { photoURL: url });
       setPhotoURL(url);
     } catch (err: any) {
       alert('Upload failed: ' + err.message);
     }
+    setUploading(false);
   };
 
   const handleAuth = async () => {
@@ -147,13 +164,14 @@ export default function Profile() {
             <p className="text-gray-400 text-sm">{user.email}</p>
             <button
               onClick={logout}
-              className="mt-6 flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-xl transition"
+              disabled={uploading}
+              className="mt-6 flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-xl transition disabled:opacity-50"
             >
-              <FaSignOutAlt /> Logout
+              <FaSignOutAlt /> {uploading ? 'Uploading...' : 'Logout'}
             </button>
           </div>
         </div>
       </div>
     </div>
   );
-            }
+      }
