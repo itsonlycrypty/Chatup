@@ -9,10 +9,13 @@ export default function Home() {
 
   useEffect(() => {
     if (!loading) {
-      if (user) router.push('/profile');
-      else router.push('/profile'); // always go to profile (which shows login if not logged)
+      router.push('/profile');
     }
-  }, [user, loading, router]);
+  }, [loading, router]);
 
-  return <div className="flex items-center justify-center h-screen">Loading...</div>;
+  return (
+    <div className="flex items-center justify-center h-screen bg-black">
+      <div className="animate-spin h-8 w-8 border-t-2 border-b-2 border-blue-500 rounded-full"></div>
+    </div>
+  );
 }
