@@ -5,6 +5,7 @@ import { storage, db } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import Image from 'next/image';
+import { FaCamera, FaSignOutAlt, FaEnvelope, FaLock } from 'react-icons/fa';
 
 export default function Profile() {
   const { user, login, signup, logout } = useAuth();
@@ -15,10 +16,9 @@ export default function Profile() {
   const [displayName, setDisplayName] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Load user profile data
   useEffect(() => {
     if (user) {
-      if (!db) return; // ✅ Stop if Firebase not initialized
+      if (!db) return;
       const fetchUser = async () => {
         const docRef = doc(db, 'users', user.uid);
         const docSnap = await getDoc(docRef);
@@ -61,57 +61,81 @@ export default function Profile() {
     }
   };
 
+  // Login / Signup screen
   if (!user) {
     return (
-      <div className="p-6 h-screen flex flex-col justify-center">
-        <h1 className="text-3xl font-bold text-center mb-8">Chat Up</h1>
-        <input
-          className="bg-gray-800 p-3 rounded mb-3"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <input
-          className="bg-gray-800 p-3 rounded mb-3"
-          placeholder="Password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        <button onClick={handleAuth} className="bg-blue-600 p-3 rounded font-bold">
-          {isLogin ? 'Login' : 'Sign Up'}
-        </button>
-        <p
-          className="text-center mt-4 text-gray-400 cursor-pointer"
-          onClick={() => setIsLogin(!isLogin)}
-        >
-          {isLogin ? 'No account? Sign Up' : 'Have an account? Login'}
-        </p>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-black p-6">
+        <div className="w-full max-w-sm bg-gray-800/50 backdrop-blur-md rounded-3xl p-8 shadow-2xl border border-gray-700">
+          <h1 className="text-4xl font-bold text-center text-white mb-8">Chat Up</h1>
+          <div className="space-y-4">
+            <div className="relative">
+              <FaEnvelope className="absolute left-3 top-3 text-gray-400" />
+              <input
+                className="w-full bg-gray-700/50 text-white pl-10 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div className="relative">
+              <FaLock className="absolute left-3 top-3 text-gray-400" />
+              <input
+                className="w-full bg-gray-700/50 text-white pl-10 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+            <button
+              onClick={handleAuth}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition duration-200"
+            >
+              {isLogin ? 'Log In' : 'Sign Up'}
+            </button>
+            <p
+              className="text-center text-gray-400 cursor-pointer hover:text-white transition"
+              onClick={() => setIsLogin(!isLogin)}
+            >
+              {isLogin ? 'No account? Create one' : 'Already have an account? Log in'}
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
 
+  // Profile screen (logged in)
   return (
-    <div className="p-6 pb-24">
-      <div className="flex flex-col items-center">
-        <div
-          onClick={() => fileRef.current?.click()}
-          className="w-32 h-32 rounded-full bg-gray-700 overflow-hidden cursor-pointer border-4 border-blue-500"
-        >
-          {photoURL ? (
-            <Image src={photoURL} alt="Profile" width={128} height={128} className="object-cover w-full h-full" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-4xl">📷</div>
-          )}
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black p-6 pb-24">
+      <div className="max-w-sm mx-auto">
+        <div className="bg-gray-800/50 backdrop-blur-md rounded-3xl p-6 shadow-2xl border border-gray-700">
+          <div className="flex flex-col items-center">
+            <div
+              onClick={() => fileRef.current?.click()}
+              className="relative w-32 h-32 rounded-full bg-gray-700 overflow-hidden cursor-pointer border-4 border-blue-500 hover:opacity-80 transition"
+            >
+              {photoURL ? (
+                <Image src={photoURL} alt="Profile" width={128} height={128} className="object-cover w-full h-full" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-4xl bg-gray-600">📷</div>
+              )}
+              <div className="absolute bottom-0 right-0 bg-blue-600 rounded-full p-2 border-2 border-gray-900">
+                <FaCamera className="text-white text-sm" />
+              </div>
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" onChange={handleUpload} className="hidden" />
+            <h2 className="text-2xl font-bold text-white mt-4">{displayName}</h2>
+            <p className="text-gray-400 text-sm">{user.email}</p>
+            <button
+              onClick={logout}
+              className="mt-6 flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-xl transition"
+            >
+              <FaSignOutAlt /> Logout
+            </button>
+          </div>
         </div>
-        <input ref={fileRef} type="file" accept="image/*" onChange={handleUpload} className="hidden" />
-        <h2 className="text-xl mt-4">{displayName || user.email}</h2>
-        <p className="text-sm text-gray-400">{user.email}</p>
-        <button onClick={logout} className="mt-6 bg-red-600 px-6 py-2 rounded">
-          Logout
-        </button>
-        <p className="text-xs text-gray-500 mt-6">Built for AppCreator24 APK</p>
       </div>
     </div>
   );
-      }
+                      }
