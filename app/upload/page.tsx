@@ -4,7 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { storage, db } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc } from 'firebase/firestore';
-import { FaCamera, FaVideo, FaTimes } from 'react-icons/fa';
+import { FaCamera, FaTimes } from 'react-icons/fa';
 
 export default function Upload() {
   const { user } = useAuth();
@@ -108,4 +108,4 @@ export default function Upload() {
       </button>
     </div>
   );
-      }
+        }
