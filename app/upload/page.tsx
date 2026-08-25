@@ -23,6 +23,7 @@ export default function Upload() {
 
   const handleUpload = async () => {
     if (!file || !user) return alert('Select a file first');
+    if (!storage || !db) return alert('Firebase not initialized');
     setUploading(true);
     try {
       const path = `posts/${user.uid}/${Date.now()}_${file.name}`;
@@ -89,4 +90,4 @@ export default function Upload() {
       </button>
     </div>
   );
-                            }
+        }
