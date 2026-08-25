@@ -1,13 +1,10 @@
 'use client';
 import { useState, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { db } from '@/lib/firebase';
-import { collection, addDoc } from 'firebase/firestore';
 import { FaCamera, FaTimes } from 'react-icons/fa';
 
-// ✅ Your Cloudinary credentials (copy from your dashboard)
-const CLOUD_NAME = 'jtdafdgp';        // from your screenshot
-const UPLOAD_PRESET = 'chatup';       // the preset you created
+const CLOUD_NAME = 'jtdafdgp';
+const UPLOAD_PRESET = 'chatup';
 
 export default function Upload() {
   const { user } = useAuth();
@@ -29,31 +26,25 @@ export default function Upload() {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('upload_preset', UPLOAD_PRESET);
-
     const response = await fetch(
       `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/upload`,
       { method: 'POST', body: formData }
     );
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error?.message || 'Upload failed');
     return data.secure_url;
   };
 
   const handleUpload = async () => {
-    if (!file || !user) return alert('Select a file first');
-    if (!db) return alert('Firebase not initialized');
+    if (!file || !user) return alert('Select a file');
     setUploading(true);
     try {
-      const url = await uploadToCloudinary(file);
-
-      await addDoc(collection(db, 'posts'), {
-        userId: user.uid,
-        text: text,
-        [file.type.startsWith('video') ? 'videoURL' : 'imageURL']: url,
-        likes: 0,
-        timestamp: new Date(),
+      const imageURL = await uploadToCloudinary(file);
+      await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, imageURL, userId: user.id }),
       });
-      alert('Posted successfully!');
+      alert('Posted!');
       setFile(null);
       setPreview(null);
       setText('');
@@ -64,62 +55,38 @@ export default function Upload() {
     setUploading(false);
   };
 
-  const clearPreview = () => {
-    setFile(null);
-    setPreview(null);
-    if (fileRef.current) fileRef.current.value = '';
-  };
-
   return (
     <div className="p-6 pb-24 max-w-md mx-auto">
       <h1 className="text-2xl font-bold text-white mb-6">Create Post</h1>
       <div
         onClick={() => fileRef.current?.click()}
-        className="relative border-2 border-dashed border-gray-600 rounded-2xl p-10 text-center cursor-pointer hover:border-blue-500 transition bg-gray-800/30"
+        className="border-2 border-dashed border-gray-600 rounded-2xl p-10 text-center cursor-pointer"
       >
         {preview ? (
           <div className="relative">
-            {file?.type.startsWith('video') ? (
-              <video src={preview} controls className="max-h-64 mx-auto rounded" />
-            ) : (
-              <img src={preview} className="max-h-64 mx-auto rounded" />
-            )}
-            <button
-              onClick={(e) => { e.stopPropagation(); clearPreview(); }}
-              className="absolute top-2 right-2 bg-red-600 rounded-full p-1"
-            >
+            <img src={preview} className="max-h-64 mx-auto rounded" />
+            <button onClick={() => { setFile(null); setPreview(null); }} className="absolute top-2 right-2 bg-red-600 rounded-full p-1">
               <FaTimes className="text-white" />
             </button>
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-2 text-gray-400">
-            <FaCamera size={40} />
-            <p>Tap to choose photo or video</p>
+          <div className="text-gray-400">
+            <FaCamera size={40} className="mx-auto" />
+            <p>Tap to choose photo</p>
           </div>
         )}
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*,video/*"
-          capture="environment"
-          onChange={handleFileChange}
-          className="hidden"
-        />
+        <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleFileChange} className="hidden" />
       </div>
       <textarea
-        className="w-full bg-gray-800 text-white p-4 rounded-xl mt-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full bg-gray-800 text-white p-4 rounded-xl mt-4"
         placeholder="Write a caption..."
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={3}
       />
-      <button
-        onClick={handleUpload}
-        disabled={uploading}
-        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl mt-4 transition disabled:opacity-50"
-      >
+      <button onClick={handleUpload} disabled={uploading} className="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl mt-4">
         {uploading ? 'Uploading...' : 'Publish'}
       </button>
     </div>
   );
-}
+  }
