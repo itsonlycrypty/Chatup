@@ -13,7 +13,7 @@ export default function ChatList() {
   useEffect(() => {
     if (!user || !db) return;
     const fetchUsers = async () => {
-      const snap = await getDocs(collection(db, 'users'));
+      const snap = await getDocs(collection(db!, 'users'));
       const list = snap.docs
         .map((d) => ({ id: d.id, ...d.data() } as { id: string; email: string; displayName?: string }))
         .filter((u) => u.id !== user.uid);
@@ -37,4 +37,4 @@ export default function ChatList() {
       ))}
     </div>
   );
-          }
+}
