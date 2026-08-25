@@ -3,6 +3,10 @@ import { useState, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { FaCamera, FaTimes, FaCheck, FaClock, FaLink } from 'react-icons/fa';
 import { useRouter } from 'next/navigation';
+import { fetchData, saveData } from '@/lib/db';
+
+const CLOUD_NAME = 'jtdafdgp';
+const UPLOAD_PRESET = 'chatup';
 
 export default function Upload() {
   const { user } = useAuth();
@@ -20,8 +24,21 @@ export default function Upload() {
     if (f) {
       setFile(f);
       setPreview(URL.createObjectURL(f));
-      setExternalUrl(''); // clear URL if file selected
+      setExternalUrl('');
     }
+  };
+
+  const uploadToCloudinary = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', UPLOAD_PRESET);
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) throw new Error('Cloudinary upload failed');
+    const data = await res.json();
+    return data.secure_url;
   };
 
   const handleUpload = async () => {
@@ -32,27 +49,35 @@ export default function Upload() {
     try {
       let media = '';
       if (file) {
-        const reader = new FileReader();
-        const dataUrl = await new Promise<string>((resolve) => {
-          reader.onload = (e) => resolve(e.target?.result as string);
-          reader.readAsDataURL(file);
-        });
-        media = dataUrl;
+        media = await uploadToCloudinary(file);
       } else {
-        media = externalUrl.trim(); // external link
+        media = externalUrl.trim();
       }
 
-      const endpoint = postType === 'story' ? '/api/stories' : '/api/posts';
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, media, userId: user.id, type: postType }),
-      });
-      if (!res.ok) throw new Error('Upload failed');
+      const data = await fetchData();
+      const posts = data.posts || [];
+      const newItem = {
+        id: Date.now().toString(),
+        text: text || '',
+        media,
+        userId: user.id,
+        likes: 0,
+        comments: [],
+        timestamp: new Date().toISOString(),
+        type: postType,
+      };
+      if (postType === 'story') {
+        const stories = data.stories || [];
+        stories.push({ ...newItem, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() });
+        await saveData({ ...data, stories });
+      } else {
+        posts.unshift(newItem);
+        await saveData({ ...data, posts });
+      }
       alert('Uploaded!');
       router.push('/feed');
     } catch (err: any) {
-      alert(err.message);
+      alert('Upload failed: ' + err.message);
     }
     setUploading(false);
   };
@@ -68,11 +93,7 @@ export default function Upload() {
       <div className="w-full max-w-md bg-gray-800/50 backdrop-blur-md rounded-3xl p-6 border border-gray-700">
         <h1 className="text-2xl font-bold text-white text-center mb-6">Create New</h1>
 
-        {/* File picker */}
-        <div
-          onClick={() => fileRef.current?.click()}
-          className="border-2 border-dashed border-gray-600 rounded-2xl p-6 text-center cursor-pointer hover:border-blue-500 transition"
-        >
+        <div onClick={() => fileRef.current?.click()} className="border-2 border-dashed border-gray-600 rounded-2xl p-6 text-center cursor-pointer hover:border-blue-500 transition">
           {preview ? (
             <div className="relative">
               {file?.type.startsWith('video') ? (
@@ -80,10 +101,7 @@ export default function Upload() {
               ) : (
                 <img src={preview} className="max-h-64 mx-auto rounded" />
               )}
-              <button
-                onClick={(e) => { e.stopPropagation(); clearPreview(); }}
-                className="absolute top-2 right-2 bg-red-600 rounded-full p-1"
-              >
+              <button onClick={(e) => { e.stopPropagation(); clearPreview(); }} className="absolute top-2 right-2 bg-red-600 rounded-full p-1">
                 <FaTimes className="text-white" />
               </button>
             </div>
@@ -93,17 +111,9 @@ export default function Upload() {
               <p className="mt-2">Tap to choose photo or video</p>
             </div>
           )}
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*,video/*"
-            capture="environment"
-            onChange={handleFileChange}
-            className="hidden"
-          />
+          <input ref={fileRef} type="file" accept="image/*,video/*" capture="environment" onChange={handleFileChange} className="hidden" />
         </div>
 
-        {/* OR External URL */}
         <div className="mt-4 relative">
           <FaLink className="absolute left-3 top-3 text-gray-400" />
           <input
@@ -112,7 +122,7 @@ export default function Upload() {
             value={externalUrl}
             onChange={(e) => {
               setExternalUrl(e.target.value);
-              if (e.target.value) { clearPreview(); } // clear file if URL is entered
+              if (e.target.value) clearPreview();
             }}
           />
         </div>
@@ -126,20 +136,10 @@ export default function Upload() {
         />
 
         <div className="flex gap-4 mt-4">
-          <button
-            onClick={() => setPostType('post')}
-            className={`flex-1 py-2 rounded-full text-sm font-semibold transition ${
-              postType === 'post' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'
-            }`}
-          >
+          <button onClick={() => setPostType('post')} className={`flex-1 py-2 rounded-full text-sm font-semibold transition ${postType === 'post' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'}`}>
             <FaCheck className="inline mr-1" /> Post
           </button>
-          <button
-            onClick={() => setPostType('story')}
-            className={`flex-1 py-2 rounded-full text-sm font-semibold transition ${
-              postType === 'story' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-400'
-            }`}
-          >
+          <button onClick={() => setPostType('story')} className={`flex-1 py-2 rounded-full text-sm font-semibold transition ${postType === 'story' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-400'}`}>
             <FaClock className="inline mr-1" /> Story (24h)
           </button>
         </div>
@@ -152,13 +152,10 @@ export default function Upload() {
           {uploading ? 'Uploading...' : 'Publish'}
         </button>
 
-        <button
-          onClick={() => router.push('/feed')}
-          className="w-full text-gray-400 text-sm mt-3 hover:text-white"
-        >
+        <button onClick={() => router.push('/feed')} className="w-full text-gray-400 text-sm mt-3 hover:text-white">
           Cancel
         </button>
       </div>
     </div>
   );
-    }
+  }
