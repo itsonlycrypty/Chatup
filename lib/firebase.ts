@@ -3,7 +3,6 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
-// Hardcoded config – replace with YOUR actual values
 const firebaseConfig = {
   apiKey: "AIzaSyALwikAxh-QcnNFLvUzJQOgbuhu931_Gdc",
   authDomain: "chatup-4c19d.firebaseapp.com",
@@ -13,7 +12,8 @@ const firebaseConfig = {
   appId: "1:254805464495:web:c76a84cedb426a17550b5a"
 };
 
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const storage = getStorage(app);
+// Only initialize if we're in the browser
+const app = typeof window !== 'undefined' && !getApps().length ? initializeApp(firebaseConfig) : null;
+export const auth = app ? getAuth(app) : null;
+export const db = app ? getFirestore(app) : null;
+export const storage = app ? getStorage(app) : null;
