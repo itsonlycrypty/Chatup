@@ -19,7 +19,7 @@ export default function Feed() {
 
   useEffect(() => {
     if (!db) return;
-    const q = query(collection(db, 'posts'), orderBy('timestamp', 'desc'));
+    const q = query(collection(db!, 'posts'), orderBy('timestamp', 'desc'));
     return onSnapshot(q, (snap) => {
       setPosts(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Post)));
     });
@@ -27,7 +27,7 @@ export default function Feed() {
 
   const handleLike = async (id: string) => {
     if (!db) return;
-    await updateDoc(doc(db, 'posts', id), { likes: increment(1) });
+    await updateDoc(doc(db!, 'posts', id), { likes: increment(1) });
   };
 
   return (
@@ -52,4 +52,4 @@ export default function Feed() {
       ))}
     </div>
   );
-    }
+                               }
