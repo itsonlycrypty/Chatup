@@ -5,11 +5,11 @@ import { fetchData, saveData } from '@/lib/db';
 const AuthContext = createContext<any>({});
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [allUsers, setAllUsers] = useState([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
 
-  const refreshUsers = async () => {
+  const refreshUsers = async (): Promise<any[]> => {
     const data = await fetchData();
     const users = data.users || [];
     setAllUsers(users);
@@ -18,7 +18,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, pin: string) => {
     const data = await fetchData();
-    let users = data.users || [];
+    let users: any[] = data.users || [];
     let found = users.find((u: any) => u.email === email);
 
     if (!found) {
@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updateUser = async (updated: any) => {
     const data = await fetchData();
-    const users = data.users || [];
+    const users: any[] = data.users || [];
     const idx = users.findIndex((u: any) => u.id === updated.userId);
     if (idx !== -1) {
       users[idx] = { ...users[idx], ...updated };
@@ -80,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const followUser = async (targetUserId: string) => {
     if (!user) return;
-    const users = await refreshUsers();
+    const users: any[] = await refreshUsers(); // explicitly cast to any[]
     const currentIdx = users.findIndex((u: any) => u.id === user.id);
     const targetIdx = users.findIndex((u: any) => u.id === targetUserId);
     if (currentIdx === -1 || targetIdx === -1) return;
@@ -130,5 +130,4 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ✅ This hook is correctly exported – keep it unless you really want to remove it.
 export const useAuth = () => useContext(AuthContext);
