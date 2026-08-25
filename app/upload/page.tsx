@@ -1,10 +1,13 @@
 'use client';
 import { useState, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { storage, db } from '@/lib/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db } from '@/lib/firebase';
 import { collection, addDoc } from 'firebase/firestore';
 import { FaCamera, FaTimes } from 'react-icons/fa';
+
+// ✅ Your Cloudinary credentials (copy from your dashboard)
+const CLOUD_NAME = 'jtdafdgp';        // from your screenshot
+const UPLOAD_PRESET = 'chatup';       // the preset you created
 
 export default function Upload() {
   const { user } = useAuth();
@@ -22,17 +25,28 @@ export default function Upload() {
     }
   };
 
+  const uploadToCloudinary = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', UPLOAD_PRESET);
+
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/upload`,
+      { method: 'POST', body: formData }
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || 'Upload failed');
+    return data.secure_url;
+  };
+
   const handleUpload = async () => {
     if (!file || !user) return alert('Select a file first');
-    if (!storage || !db) return alert('Firebase not initialized');
+    if (!db) return alert('Firebase not initialized');
     setUploading(true);
     try {
-      const path = `posts/${user.uid}/${Date.now()}_${file.name}`;
-      const storageRef = ref(storage!, path);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
+      const url = await uploadToCloudinary(file);
 
-      await addDoc(collection(db!, 'posts'), {
+      await addDoc(collection(db, 'posts'), {
         userId: user.uid,
         text: text,
         [file.type.startsWith('video') ? 'videoURL' : 'imageURL']: url,
@@ -108,4 +122,4 @@ export default function Upload() {
       </button>
     </div>
   );
-      }
+}
