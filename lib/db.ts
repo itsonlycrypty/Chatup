@@ -1,4 +1,3 @@
-// lib/db.ts
 const BIN_ID = '6a8e0fb3da38895dfe106f8c';
 const API_KEY = '$2a$10$r1kHroezSkMDu0f2HTVOQerg29AfetwH4AAKa6X8TDTIbliIda/OS';
 
