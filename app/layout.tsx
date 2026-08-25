@@ -9,13 +9,21 @@ const inter = Inter({ subsets: ['latin'] });
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
-  useEffect(() => setLoading(false), []);
+  
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   if (loading) {
     return (
       <html lang="en">
         <body className="bg-black flex items-center justify-center h-screen">
-          <div className="animate-spin h-16 w-16 border-t-4 border-b-4 border-blue-500 rounded-full"></div>
+          <div className="text-center">
+            <div className="animate-spin h-16 w-16 border-t-4 border-b-4 border-blue-500 rounded-full mx-auto mb-6"></div>
+            <h1 className="text-3xl font-bold text-white">Chat Up</h1>
+            <p className="text-gray-400 text-sm mt-2">created by <span className="text-blue-400">crypty</span> &amp; <span className="text-purple-400">Mole</span></p>
+          </div>
         </body>
       </html>
     );
@@ -31,4 +39,4 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </body>
     </html>
   );
-    }
+              }
