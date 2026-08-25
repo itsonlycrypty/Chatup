@@ -18,6 +18,7 @@ export default function Profile() {
   // Load user profile data
   useEffect(() => {
     if (user) {
+      if (!db) return; // ✅ Stop if Firebase not initialized
       const fetchUser = async () => {
         const docRef = doc(db, 'users', user.uid);
         const docSnap = await getDoc(docRef);
@@ -26,7 +27,6 @@ export default function Profile() {
           setPhotoURL(data.photoURL || '');
           setDisplayName(data.displayName || user.email || '');
         } else {
-          // create user document on first login
           await setDoc(docRef, { email: user.email, photoURL: '', displayName: user.email });
         }
       };
@@ -37,6 +37,7 @@ export default function Profile() {
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
+    if (!storage || !db) return alert('Firebase not initialized');
     try {
       const storageRef = ref(storage, `profiles/${user.uid}`);
       await uploadBytes(storageRef, file);
@@ -113,4 +114,4 @@ export default function Profile() {
       </div>
     </div>
   );
-}
+      }
