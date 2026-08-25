@@ -9,25 +9,41 @@ const AuthContext = createContext<any>({});
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [allUsers, setAllUsers] = useState([]); // for follow/unfollow
+  const [allUsers, setAllUsers] = useState([]);
 
   const fetchData = async () => {
-    const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
-      headers: { 'X-Master-Key': API_KEY }
-    });
-    const data = await res.json();
-    return data.record;
+    try {
+      const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+        headers: { 'X-Master-Key': API_KEY }
+      });
+      const data = await res.json();
+      return data.record;
+    } catch (e) {
+      console.error('Fetch error:', e);
+      return { users: [], posts: [], stories: [], chats: {} };
+    }
   };
 
   const saveData = async (data: any) => {
-    await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': API_KEY
-      },
-      body: JSON.stringify(data)
-    });
+    try {
+      await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Master-Key': API_KEY
+        },
+        body: JSON.stringify(data)
+      });
+    } catch (e) {
+      console.error('Save error:', e);
+    }
+  };
+
+  const refreshUsers = async () => {
+    const data = await fetchData();
+    const users = data.users || [];
+    setAllUsers(users);
+    return users;
   };
 
   const login = async (email: string, pin: string) => {
@@ -92,33 +108,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const refreshUsers = async () => {
-    const data = await fetchData();
-    setAllUsers(data.users || []);
-    return data.users || [];
-  };
-
-  useEffect(() => {
-    const saved = localStorage.getItem('user');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed.username === 'Onlycrypty' || parsed.username === 'crypty') {
-        parsed.isAdmin = true;
-        parsed.isVerified = true;
-        localStorage.setItem('user', JSON.stringify(parsed));
-      }
-      setUser(parsed);
-      refreshUsers().then(users => setAllUsers(users));
-    }
-    setLoading(false);
-  }, []);
-
   const followUser = async (targetUserId: string) => {
     if (!user) return;
     const users = await refreshUsers();
-    const current = users.find((u: any) => u.id === user.id);
-    const target = users.find((u: any) => u.id === targetUserId);
-    if (!current || !target) return;
+    const currentIdx = users.findIndex((u: any) => u.id === user.id);
+    const targetIdx = users.findIndex((u: any) => u.id === targetUserId);
+    if (currentIdx === -1 || targetIdx === -1) return;
+    const current = users[currentIdx];
+    const target = users[targetIdx];
     if (!current.following) current.following = [];
     if (!target.followers) target.followers = [];
     const already = current.following.includes(targetUserId);
@@ -133,11 +130,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     data.users = users;
     await saveData(data);
     setAllUsers(users);
-    // update current user
     const updatedUser = users.find((u: any) => u.id === user.id);
     setUser(updatedUser);
     localStorage.setItem('user', JSON.stringify(updatedUser));
   };
+
+  useEffect(() => {
+    const saved = localStorage.getItem('user');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.username === 'Onlycrypty' || parsed.username === 'crypty') {
+        parsed.isAdmin = true;
+        parsed.isVerified = true;
+        localStorage.setItem('user', JSON.stringify(parsed));
+      }
+      setUser(parsed);
+      refreshUsers();
+    }
+    setLoading(false);
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, loading, login, logout, updateUser, allUsers, followUser, refreshUsers }}>
