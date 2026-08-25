@@ -17,9 +17,11 @@ export default function ChatRoom() {
 
   useEffect(() => {
     if (!user || !id) return;
-    if (!db) return;
+    if (!db) return; // runtime check
+
     const fetchName = async () => {
-      const docSnap = await getDoc(doc(db, 'users', id));
+      // Use db! (non-null assertion) after we've confirmed it's not null
+      const docSnap = await getDoc(doc(db!, 'users', id));
       if (docSnap.exists()) {
         const data = docSnap.data();
         setRecipientName(data.displayName || data.email || 'User');
@@ -28,7 +30,7 @@ export default function ChatRoom() {
     fetchName();
 
     const chatId = getChatId(user.uid, id);
-    const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
+    const q = query(collection(db!, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
     return onSnapshot(q, (snap) => {
       setMessages(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
@@ -39,7 +41,7 @@ export default function ChatRoom() {
     if (!text.trim() || !user) return;
     if (!db) return;
     const chatId = getChatId(user.uid, id);
-    await addDoc(collection(db, 'chats', chatId, 'messages'), {
+    await addDoc(collection(db!, 'chats', chatId, 'messages'), {
       senderId: user.uid,
       text,
       timestamp: new Date(),
@@ -77,4 +79,4 @@ export default function ChatRoom() {
       </div>
     </div>
   );
-    }
+                      }
