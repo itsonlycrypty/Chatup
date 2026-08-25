@@ -26,7 +26,6 @@ export default function Upload() {
     if (!file || !user) return alert('Select a file');
     setUploading(true);
     try {
-      // Convert file to base64 for local storage (or use Cloudinary)
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onload = async () => {
@@ -38,11 +37,10 @@ export default function Upload() {
           userId: user.id,
           likes: 0,
           timestamp: new Date().toISOString(),
-          type: postType, // 'post' or 'story'
+          type: postType,
         };
 
         if (postType === 'story') {
-          // Stories are stored separately with expiry (24h)
           const stories = JSON.parse(localStorage.getItem('chatup_stories') || '[]');
           stories.push({
             ...newItem,
@@ -50,13 +48,12 @@ export default function Upload() {
           });
           localStorage.setItem('chatup_stories', JSON.stringify(stories));
         } else {
-          // Posts go to the feed (but we no longer have a feed page – we show them on profile)
           const posts = JSON.parse(localStorage.getItem('chatup_posts') || '[]');
           posts.unshift(newItem);
           localStorage.setItem('chatup_posts', JSON.stringify(posts));
         }
         alert(`${postType === 'story' ? 'Story' : 'Post'} uploaded!`);
-        router.push('/profile');
+        router.push('/feed');
       };
     } catch (err: any) {
       alert('Upload failed: ' + err.message);
@@ -149,7 +146,7 @@ export default function Upload() {
         </button>
 
         <button
-          onClick={() => router.push('/profile')}
+          onClick={() => router.push('/feed')}
           className="w-full text-gray-400 text-sm mt-3 hover:text-white"
         >
           Cancel
@@ -157,4 +154,4 @@ export default function Upload() {
       </div>
     </div>
   );
-    }
+                                                          }
