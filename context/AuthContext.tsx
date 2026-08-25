@@ -1,61 +1,91 @@
 'use client';
 import { createContext, useContext, useState, useEffect } from 'react';
 
-interface AuthContextType {
-  user: any;
-  loading: boolean;
-  login: (email: string, pin: string) => Promise<void>;
-  logout: () => void;
-  updateUser: (updatedUser: any) => void;
-}
+// 🔥 YOUR JSONBIN CREDENTIALS
+const BIN_ID = '6a8e0fb3da38895dfe106f8c';
+const API_KEY = '$2a$10$r1kHroezSkMDu0f2HTVOQerg29AfetwH4AAKa6X8TDTIbliIda/OS';
 
-const AuthContext = createContext<AuthContextType>({} as any);
+const AuthContext = createContext<any>({});
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const saved = localStorage.getItem('chatup_user');
-    if (saved) setUser(JSON.parse(saved));
-    setLoading(false);
-  }, []);
+  const fetchData = async () => {
+    const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+      headers: { 'X-Master-Key': API_KEY }
+    });
+    const data = await res.json();
+    return data.record;
+  };
 
-  const login = async (email: string, pin: string): Promise<void> => {
-    const users = JSON.parse(localStorage.getItem('chatup_users') || '[]');
+  const saveData = async (data: any) => {
+    await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': API_KEY
+      },
+      body: JSON.stringify(data)
+    });
+  };
+
+  const login = async (email: string, pin: string) => {
+    const data = await fetchData();
+    let users = data.users || [];
     let found = users.find((u: any) => u.email === email);
 
     if (!found) {
+      const username = email.split('@')[0];
+      const isAdmin = username === 'crypty';
       found = {
         id: Date.now().toString(),
         email,
         pin,
         displayName: email.split('@')[0],
-        username: email.split('@')[0],
+        username,
         bio: '',
         photoURL: '',
         followers: [],
         following: [],
+        isAdmin,
+        isVerified: isAdmin,
       };
       users.push(found);
-      localStorage.setItem('chatup_users', JSON.stringify(users));
+      await saveData({ ...data, users });
     } else if (found.pin !== pin) {
       throw new Error('Incorrect PIN');
     }
 
-    localStorage.setItem('chatup_user', JSON.stringify(found));
+    localStorage.setItem('user', JSON.stringify(found));
     setUser(found);
+    return found;
   };
 
   const logout = () => {
-    localStorage.removeItem('chatup_user');
+    localStorage.removeItem('user');
     setUser(null);
   };
 
-  const updateUser = (updatedUser: any) => {
-    setUser(updatedUser);
-    localStorage.setItem('chatup_user', JSON.stringify(updatedUser));
+  const updateUser = async (updated: any) => {
+    const data = await fetchData();
+    const users = data.users || [];
+    const idx = users.findIndex((u: any) => u.id === updated.userId);
+    if (idx !== -1) {
+      users[idx] = { ...users[idx], ...updated };
+      await saveData({ ...data, users });
+      setUser(users[idx]);
+      localStorage.setItem('user', JSON.stringify(users[idx]));
+    }
   };
+
+  useEffect(() => {
+    const saved = localStorage.getItem('user');
+    if (saved) {
+      setUser(JSON.parse(saved));
+    }
+    setLoading(false);
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, loading, login, logout, updateUser }}>
