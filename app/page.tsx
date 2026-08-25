@@ -9,8 +9,8 @@ export default function Home() {
 
   useEffect(() => {
     if (!loading) {
-      if (user) router.push('/feed');
-      else router.push('/profile');
+      if (user) router.push('/profile');
+      else router.push('/profile'); // always go to profile (which shows login if not logged)
     }
   }, [user, loading, router]);
 
