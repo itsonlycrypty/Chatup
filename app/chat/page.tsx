@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 
@@ -10,8 +10,9 @@ export default function ChatList() {
   const [users, setUsers] = useState<{ id: string; email: string; displayName?: string }[]>([]);
 
   useEffect(() => {
+    if (!user) return;
+    if (!db) return; // ✅ Stop if Firebase not initialized
     const fetchUsers = async () => {
-      if (!user) return;
       const snap = await getDocs(collection(db, 'users'));
       const list = snap.docs
         .map((d) => ({ id: d.id, ...d.data() } as { id: string; email: string; displayName?: string }))
@@ -33,4 +34,4 @@ export default function ChatList() {
       ))}
     </div>
   );
-        }
+}
