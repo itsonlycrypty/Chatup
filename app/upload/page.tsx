@@ -28,11 +28,11 @@ export default function Upload() {
     setUploading(true);
     try {
       const path = `posts/${user.uid}/${Date.now()}_${file.name}`;
-      const storageRef = ref(storage, path);
+      const storageRef = ref(storage!, path);
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
 
-      await addDoc(collection(db, 'posts'), {
+      await addDoc(collection(db!, 'posts'), {
         userId: user.uid,
         text: text,
         [file.type.startsWith('video') ? 'videoURL' : 'imageURL']: url,
@@ -108,4 +108,4 @@ export default function Upload() {
       </button>
     </div>
   );
-        }
+      }
