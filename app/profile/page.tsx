@@ -20,7 +20,7 @@ export default function Profile() {
     if (user) {
       if (!db) return;
       const fetchUser = async () => {
-        const docRef = doc(db, 'users', user.uid);
+        const docRef = doc(db!, 'users', user.uid);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
@@ -39,10 +39,10 @@ export default function Profile() {
     if (!file || !user) return;
     if (!storage || !db) return alert('Firebase not initialized');
     try {
-      const storageRef = ref(storage, `profiles/${user.uid}`);
+      const storageRef = ref(storage!, `profiles/${user.uid}`);
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
-      await updateDoc(doc(db, 'users', user.uid), { photoURL: url });
+      await updateDoc(doc(db!, 'users', user.uid), { photoURL: url });
       setPhotoURL(url);
     } catch (err: any) {
       alert('Upload failed: ' + err.message);
@@ -138,4 +138,4 @@ export default function Profile() {
       </div>
     </div>
   );
-      }
+          }
