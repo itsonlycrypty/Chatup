@@ -1,86 +1,16 @@
 'use client';
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { db } from '@/lib/firebase';
-import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
-import Image from 'next/image';
-import { FaCamera, FaSignOutAlt, FaEnvelope, FaLock, FaEye, FaEyeSlash } from 'react-icons/fa';
-
-// ✅ Same Cloudinary credentials
-const CLOUD_NAME = 'jtdafdgp';
-const UPLOAD_PRESET = 'chatup';
+import { FaEnvelope, FaLock, FaSignOutAlt, FaEye, FaEyeSlash } from 'react-icons/fa';
 
 export default function Profile() {
-  const { user, loading, login, signup, logout } = useAuth();
+  const { user, loading, login, logout } = useAuth();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [pin, setPin] = useState('');
+  const [showPin, setShowPin] = useState(false);
   const [isLogin, setIsLogin] = useState(true);
-  const [photoURL, setPhotoURL] = useState<string>('');
-  const [displayName, setDisplayName] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState('');
 
-  // Load user profile data
-  useEffect(() => {
-    if (user) {
-      if (!db) return;
-      const fetchUser = async () => {
-        const docRef = doc(db!, 'users', user.uid);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setPhotoURL(data.photoURL || '');
-          setDisplayName(data.displayName || user.email || '');
-        } else {
-          await setDoc(docRef, { email: user.email, photoURL: '', displayName: user.email });
-        }
-      };
-      fetchUser();
-    }
-  }, [user]);
-
-  const uploadToCloudinary = async (file: File): Promise<string> => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', UPLOAD_PRESET);
-    const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/upload`,
-      { method: 'POST', body: formData }
-    );
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error?.message || 'Upload failed');
-    return data.secure_url;
-  };
-
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
-    if (!db) return alert('Firebase not initialized');
-    setUploading(true);
-    try {
-      const url = await uploadToCloudinary(file);
-      await updateDoc(doc(db!, 'users', user.uid), { photoURL: url });
-      setPhotoURL(url);
-    } catch (err: any) {
-      alert('Upload failed: ' + err.message);
-    }
-    setUploading(false);
-  };
-
-  const handleAuth = async () => {
-    try {
-      if (isLogin) {
-        await login(email, password);
-      } else {
-        await signup(email, password);
-      }
-    } catch (err: any) {
-      alert(err.message);
-    }
-  };
-
-  // Show loading screen while auth is initializing
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black">
@@ -89,7 +19,6 @@ export default function Profile() {
     );
   }
 
-  // Login / Signup screen
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-black p-6">
@@ -109,31 +38,48 @@ export default function Profile() {
               <FaLock className="absolute left-3 top-3 text-gray-400" />
               <input
                 className="w-full bg-gray-700/50 text-white pl-10 pr-12 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Password"
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                placeholder={isLogin ? "Enter 4-digit PIN" : "Create 4-digit PIN"}
+                type={showPin ? 'text' : 'password'}
+                maxLength={4}
+                value={pin}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, '');
+                  if (val.length <= 4) setPin(val);
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && login(email, pin)}
               />
               <button
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
+                onClick={() => setShowPin(!showPin)}
                 className="absolute right-3 top-3 text-gray-400 hover:text-white"
               >
-                {showPassword ? <FaEyeSlash /> : <FaEye />}
+                {showPin ? <FaEyeSlash /> : <FaEye />}
               </button>
             </div>
+            {error && <p className="text-red-400 text-sm">{error}</p>}
             <button
-              onClick={handleAuth}
+              onClick={async () => {
+                try {
+                  await login(email, pin);
+                } catch (err: any) {
+                  setError(err.message || 'Login failed');
+                }
+              }}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition duration-200"
             >
               {isLogin ? 'Log In' : 'Sign Up'}
             </button>
             <p
               className="text-center text-gray-400 cursor-pointer hover:text-white transition"
-              onClick={() => setIsLogin(!isLogin)}
+              onClick={() => {
+                setIsLogin(!isLogin);
+                setError('');
+                setPin('');
+              }}
             >
               {isLogin ? 'No account? Create one' : 'Already have an account? Log in'}
             </p>
+            <p className="text-gray-500 text-center text-xs">Use a 4-digit PIN to log in on any device</p>
           </div>
         </div>
       </div>
@@ -146,32 +92,21 @@ export default function Profile() {
       <div className="max-w-sm mx-auto">
         <div className="bg-gray-800/50 backdrop-blur-md rounded-3xl p-6 shadow-2xl border border-gray-700">
           <div className="flex flex-col items-center">
-            <div
-              onClick={() => fileRef.current?.click()}
-              className="relative w-32 h-32 rounded-full bg-gray-700 overflow-hidden cursor-pointer border-4 border-blue-500 hover:opacity-80 transition"
-            >
-              {photoURL ? (
-                <Image src={photoURL} alt="Profile" width={128} height={128} className="object-cover w-full h-full" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-4xl bg-gray-600">📷</div>
-              )}
-              <div className="absolute bottom-0 right-0 bg-blue-600 rounded-full p-2 border-2 border-gray-900">
-                <FaCamera className="text-white text-sm" />
-              </div>
+            <div className="w-24 h-24 rounded-full bg-blue-600 flex items-center justify-center text-4xl text-white">
+              {user.email[0].toUpperCase()}
             </div>
-            <input ref={fileRef} type="file" accept="image/*" onChange={handleUpload} className="hidden" />
-            <h2 className="text-2xl font-bold text-white mt-4">{displayName}</h2>
-            <p className="text-gray-400 text-sm">{user.email}</p>
+            <h2 className="text-2xl font-bold text-white mt-4">{user.email}</h2>
+            <p className="text-gray-400 text-sm">Logged in with PIN</p>
             <button
               onClick={logout}
-              disabled={uploading}
-              className="mt-6 flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-xl transition disabled:opacity-50"
+              className="mt-6 flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-xl transition"
             >
-              <FaSignOutAlt /> {uploading ? 'Uploading...' : 'Logout'}
+              <FaSignOutAlt /> Logout
             </button>
+            <p className="text-gray-500 text-xs mt-4">Data stored on Vercel Redis (free tier)</p>
           </div>
         </div>
       </div>
     </div>
   );
-      }
+              }
