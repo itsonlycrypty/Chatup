@@ -20,7 +20,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!auth) {
       setLoading(false);
-      return; // ✅ Stop if Firebase is not initialized
+      return;
     }
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
