@@ -1,8 +1,6 @@
 'use client';
 import { createContext, useContext, useState, useEffect } from 'react';
-
-const BIN_ID = '6a8e0fb3da38895dfe106f8c';
-const API_KEY = '$2a$10$r1kHroezSkMDu0f2HTVOQerg29AfetwH4AAKa6X8TDTIbliIda/OS';
+import { fetchData, saveData } from '@/lib/db';
 
 const AuthContext = createContext<any>({});
 
@@ -10,34 +8,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [allUsers, setAllUsers] = useState([]);
-
-  const fetchData = async () => {
-    try {
-      const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
-        headers: { 'X-Master-Key': API_KEY }
-      });
-      const data = await res.json();
-      return data.record;
-    } catch (e) {
-      console.error('Fetch error:', e);
-      return { users: [], posts: [], stories: [], chats: {} };
-    }
-  };
-
-  const saveData = async (data: any) => {
-    try {
-      await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Master-Key': API_KEY
-        },
-        body: JSON.stringify(data)
-      });
-    } catch (e) {
-      console.error('Save error:', e);
-    }
-  };
 
   const refreshUsers = async () => {
     const data = await fetchData();
@@ -114,10 +84,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const currentIdx = users.findIndex((u: any) => u.id === user.id);
     const targetIdx = users.findIndex((u: any) => u.id === targetUserId);
     if (currentIdx === -1 || targetIdx === -1) return;
+
     const current = users[currentIdx];
     const target = users[targetIdx];
     if (!current.following) current.following = [];
     if (!target.followers) target.followers = [];
+
     const already = current.following.includes(targetUserId);
     if (already) {
       current.following = current.following.filter((id: string) => id !== targetUserId);
@@ -126,6 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       current.following.push(targetUserId);
       target.followers.push(user.id);
     }
+
     const data = await fetchData();
     data.users = users;
     await saveData(data);
@@ -157,4 +130,5 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+// ✅ This hook is correctly exported – keep it unless you really want to remove it.
 export const useAuth = () => useContext(AuthContext);
