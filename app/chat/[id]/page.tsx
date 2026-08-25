@@ -17,6 +17,7 @@ export default function ChatRoom() {
 
   useEffect(() => {
     if (!user || !id) return;
+    if (!db) return; // ✅ Stop if Firebase not initialized
     // Fetch recipient name
     const fetchName = async () => {
       const docSnap = await getDoc(doc(db, 'users', id));
@@ -37,6 +38,7 @@ export default function ChatRoom() {
 
   const sendMessage = async () => {
     if (!text.trim() || !user) return;
+    if (!db) return;
     const chatId = getChatId(user.uid, id);
     await addDoc(collection(db, 'chats', chatId, 'messages'), {
       senderId: user.uid,
