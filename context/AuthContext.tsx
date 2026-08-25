@@ -37,7 +37,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!found) {
       const username = email.split('@')[0];
-      const isAdmin = username === 'crypty';
+      // ✅ Admin check – supports both "crypty" and "Onlycrypty"
+      const isAdmin = username === 'crypty' || username === 'Onlycrypty';
       found = {
         id: Date.now().toString(),
         email,
@@ -53,8 +54,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
       users.push(found);
       await saveData({ ...data, users });
-    } else if (found.pin !== pin) {
-      throw new Error('Incorrect PIN');
+    } else {
+      // ✅ If user already exists, ensure admin flag is correct
+      const username = found.username || email.split('@')[0];
+      const shouldBeAdmin = username === 'crypty' || username === 'Onlycrypty';
+      if (shouldBeAdmin && !found.isAdmin) {
+        found.isAdmin = true;
+        found.isVerified = true;
+        const idx = users.findIndex((u: any) => u.id === found.id);
+        if (idx !== -1) {
+          users[idx] = found;
+          await saveData({ ...data, users });
+        }
+      }
+      if (found.pin !== pin) {
+        throw new Error('Incorrect PIN');
+      }
     }
 
     localStorage.setItem('user', JSON.stringify(found));
