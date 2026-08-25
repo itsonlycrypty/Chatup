@@ -17,6 +17,7 @@ export default function Feed() {
   const [posts, setPosts] = useState<Post[]>([]);
 
   useEffect(() => {
+    if (!db) return; // ✅ Stop if Firebase is not initialized
     const q = query(collection(db, 'posts'), orderBy('timestamp', 'desc'));
     return onSnapshot(q, (snap) => {
       setPosts(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Post)));
@@ -24,6 +25,7 @@ export default function Feed() {
   }, []);
 
   const handleLike = async (id: string) => {
+    if (!db) return;
     await updateDoc(doc(db, 'posts', id), { likes: increment(1) });
   };
 
@@ -49,4 +51,4 @@ export default function Feed() {
       ))}
     </div>
   );
-            }
+      }
