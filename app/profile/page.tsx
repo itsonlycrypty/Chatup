@@ -5,17 +5,19 @@ import { storage, db } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import Image from 'next/image';
-import { FaCamera, FaSignOutAlt, FaEnvelope, FaLock } from 'react-icons/fa';
+import { FaCamera, FaSignOutAlt, FaEnvelope, FaLock, FaEye, FaEyeSlash } from 'react-icons/fa';
 
 export default function Profile() {
-  const { user, login, signup, logout } = useAuth();
+  const { user, loading, login, signup, logout } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLogin, setIsLogin] = useState(true);
   const [photoURL, setPhotoURL] = useState<string>('');
   const [displayName, setDisplayName] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Load user profile data
   useEffect(() => {
     if (user) {
       if (!db) return;
@@ -61,6 +63,15 @@ export default function Profile() {
     }
   };
 
+  // Show loading screen while auth is initializing
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
   // Login / Signup screen
   if (!user) {
     return (
@@ -80,12 +91,19 @@ export default function Profile() {
             <div className="relative">
               <FaLock className="absolute left-3 top-3 text-gray-400" />
               <input
-                className="w-full bg-gray-700/50 text-white pl-10 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-gray-700/50 text-white pl-10 pr-12 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Password"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-3 text-gray-400 hover:text-white"
+              >
+                {showPassword ? <FaEyeSlash /> : <FaEye />}
+              </button>
             </div>
             <button
               onClick={handleAuth}
@@ -138,4 +156,4 @@ export default function Profile() {
       </div>
     </div>
   );
-          }
+            }
