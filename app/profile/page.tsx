@@ -30,8 +30,7 @@ export default function Profile() {
 
   const loadUserData = async () => {
     if (!user) return;
-    // Since we're using JSONBin, we can fetch directly from context
-    // We'll just use the user object from context
+    // Use user data from context – admin flag already set
     setDisplayName(user.displayName || user.email);
     setUsername(user.username || user.email.split('@')[0]);
     setBio(user.bio || '');
@@ -41,7 +40,7 @@ export default function Profile() {
     setIsAdmin(user.isAdmin || false);
     setIsVerified(user.isVerified || false);
 
-    // Fetch user's posts from API (we'll add a simple endpoint)
+    // Fetch user's posts
     try {
       const res = await fetch('/api/posts');
       const allPosts = await res.json();
@@ -81,7 +80,11 @@ export default function Profile() {
   };
 
   if (loading) {
-    return <div className="h-screen flex items-center justify-center bg-black"><div className="animate-spin h-12 w-12 border-t-2 border-b-2 border-blue-500 rounded-full" /></div>;
+    return (
+      <div className="h-screen flex items-center justify-center bg-black">
+        <div className="animate-spin h-12 w-12 border-t-2 border-b-2 border-blue-500 rounded-full" />
+      </div>
+    );
   }
 
   // Login screen
@@ -105,17 +108,25 @@ export default function Profile() {
     );
   }
 
-  // Profile screen
+  // Profile screen (logged in)
   return (
     <div className="min-h-screen bg-black pb-24">
       <div className="bg-gradient-to-b from-gray-900 to-black p-6">
         <div className="flex flex-col items-center relative">
           <div className="relative">
             <div onClick={() => fileRef.current?.click()} className="w-24 h-24 rounded-full bg-gray-700 overflow-hidden cursor-pointer border-4 border-blue-500 hover:opacity-80 transition">
-              {photoURL ? <Image src={photoURL} alt="Profile" width={96} height={96} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-4xl bg-gray-600">{user.email[0].toUpperCase()}</div>}
+              {photoURL ? (
+                <Image src={photoURL} alt="Profile" width={96} height={96} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-4xl bg-gray-600">
+                  {user.email[0].toUpperCase()}
+                </div>
+              )}
             </div>
             <input ref={fileRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
-            <button onClick={() => fileRef.current?.click()} className="absolute bottom-0 right-0 bg-blue-600 rounded-full p-1.5 border-2 border-black"><FaCamera className="text-white text-xs" /></button>
+            <button onClick={() => fileRef.current?.click()} className="absolute bottom-0 right-0 bg-blue-600 rounded-full p-1.5 border-2 border-black">
+              <FaCamera className="text-white text-xs" />
+            </button>
           </div>
 
           <div className="mt-3 text-center">
@@ -133,12 +144,22 @@ export default function Profile() {
               <>
                 <h2 className={`text-xl font-bold ${isAdmin ? 'text-yellow-400' : 'text-white'}`}>
                   {displayName}
-                  {isVerified && <span className="ml-1 text-blue-500" title="Verified"><FaCheckCircle className="inline" size={18} /></span>}
-                  {isAdmin && <span className="ml-2 text-xs bg-yellow-500 text-black px-2 py-0.5 rounded-full">Admin</span>}
+                  {isVerified && (
+                    <span className="ml-1 text-blue-500" title="Verified">
+                      <FaCheckCircle className="inline" size={18} />
+                    </span>
+                  )}
+                  {isAdmin && (
+                    <span className="ml-2 text-xs bg-yellow-500 text-black px-2 py-0.5 rounded-full">
+                      Admin
+                    </span>
+                  )}
                 </h2>
                 <p className="text-gray-400 text-sm">@{username}</p>
                 {bio && <p className="text-gray-300 text-sm mt-1">{bio}</p>}
-                <button onClick={() => setIsEditing(true)} className="text-blue-400 text-xs mt-2 hover:text-blue-300"><FaEdit className="inline mr-1" /> Edit Profile</button>
+                <button onClick={() => setIsEditing(true)} className="text-blue-400 text-xs mt-2 hover:text-blue-300">
+                  <FaEdit className="inline mr-1" /> Edit Profile
+                </button>
               </>
             )}
           </div>
@@ -149,7 +170,9 @@ export default function Profile() {
             <div><p className="text-white font-bold">{totalLikes}</p><p className="text-gray-400 text-xs">Likes</p></div>
           </div>
 
-          <button onClick={logout} className="mt-4 flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-full text-sm transition"><FaSignOutAlt /> Logout</button>
+          <button onClick={logout} className="mt-4 flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-full text-sm transition">
+            <FaSignOutAlt /> Logout
+          </button>
         </div>
       </div>
 
@@ -167,25 +190,37 @@ export default function Profile() {
         </div>
       )}
 
+      {/* Your Posts Grid */}
       <div className="px-2 mt-2">
         <div className="border-t border-gray-800 pt-4">
           <div className="flex justify-between items-center px-2 mb-3">
             <h3 className="text-white font-semibold">Your Videos</h3>
-            <button onClick={() => router.push('/upload')} className="text-blue-400 text-sm"><FaPlus className="inline mr-1" /> New</button>
+            <button onClick={() => router.push('/upload')} className="text-blue-400 text-sm">
+              <FaPlus className="inline mr-1" /> New
+            </button>
           </div>
-          {userPosts.length === 0 ? <p className="text-gray-400 text-center py-8">No posts yet. Tap + to upload!</p> : (
+          {userPosts.length === 0 ? (
+            <p className="text-gray-400 text-center py-8">No posts yet. Tap + to upload!</p>
+          ) : (
             <div className="grid grid-cols-3 gap-1">
               {userPosts.map((post) => (
                 <div key={post.id} className="relative aspect-square bg-gray-800 rounded overflow-hidden group">
-                  {post.media?.startsWith('data:image') ? <Image src={post.media} alt="Post" fill className="object-cover group-hover:scale-105 transition" /> : <video src={post.media} className="w-full h-full object-cover group-hover:scale-105 transition" />}
-                  <div className="absolute bottom-1 right-1 bg-black/70 text-white text-xs px-2 py-0.5 rounded flex items-center gap-1"><FaHeart className="text-red-400" size={10} /> {post.likes || 0}</div>
+                  {post.media?.startsWith('data:image') ? (
+                    <Image src={post.media} alt="Post" fill className="object-cover group-hover:scale-105 transition" />
+                  ) : (
+                    <video src={post.media} className="w-full h-full object-cover group-hover:scale-105 transition" />
+                  )}
+                  <div className="absolute bottom-1 right-1 bg-black/70 text-white text-xs px-2 py-0.5 rounded flex items-center gap-1">
+                    <FaHeart className="text-red-400" size={10} /> {post.likes || 0}
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </div>
       </div>
+
       <FloatingPlusButton />
     </div>
   );
-    }
+         }
