@@ -1,49 +1,71 @@
 'use client';
-import { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged, User, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { createContext, useContext, useState, useEffect } from 'react';
 
 interface AuthContextType {
-  user: User | null;
+  user: { id: string; email: string; pin: string } | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string) => Promise<void>;
+  login: (email: string, pin: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({} as any);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!auth) {
+  const checkSession = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
       setLoading(false);
       return;
     }
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setLoading(false);
-    });
-    return () => unsubscribe();
+    try {
+      const res = await fetch('/api/auth', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data.user);
+      } else {
+        localStorage.removeItem('token');
+      }
+    } catch (e) {
+      console.error('Session check failed', e);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    checkSession();
   }, []);
 
-  const login = async (email: string, password: string) => {
-    if (!auth) throw new Error('Firebase not initialized');
-    await signInWithEmailAndPassword(auth, email, password);
+  const login = async (email: string, pin: string) => {
+    const res = await fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, pin }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    localStorage.setItem('token', data.sessionToken);
+    setUser(data.user);
   };
-  const signup = async (email: string, password: string) => {
-    if (!auth) throw new Error('Firebase not initialized');
-    await createUserWithEmailAndPassword(auth, email, password);
-  };
+
   const logout = async () => {
-    if (!auth) return;
-    await signOut(auth);
+    const token = localStorage.getItem('token');
+    if (token) {
+      await fetch('/api/auth', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    }
+    localStorage.removeItem('token');
+    setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
