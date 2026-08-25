@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { storage, db } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc } from 'firebase/firestore';
+import { FaCamera, FaVideo, FaTimes } from 'react-icons/fa';
 
 export default function Upload() {
   const { user } = useAuth();
@@ -49,21 +50,38 @@ export default function Upload() {
     setUploading(false);
   };
 
+  const clearPreview = () => {
+    setFile(null);
+    setPreview(null);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
   return (
-    <div className="p-6 pb-24">
-      <h1 className="text-2xl font-bold mb-4">📸 Create Post</h1>
+    <div className="p-6 pb-24 max-w-md mx-auto">
+      <h1 className="text-2xl font-bold text-white mb-6">Create Post</h1>
       <div
         onClick={() => fileRef.current?.click()}
-        className="border-2 border-dashed border-gray-600 rounded-xl p-10 text-center cursor-pointer"
+        className="relative border-2 border-dashed border-gray-600 rounded-2xl p-10 text-center cursor-pointer hover:border-blue-500 transition bg-gray-800/30"
       >
         {preview ? (
-          file?.type.startsWith('video') ? (
-            <video src={preview} controls className="max-h-64 mx-auto" />
-          ) : (
-            <img src={preview} className="max-h-64 mx-auto" />
-          )
+          <div className="relative">
+            {file?.type.startsWith('video') ? (
+              <video src={preview} controls className="max-h-64 mx-auto rounded" />
+            ) : (
+              <img src={preview} className="max-h-64 mx-auto rounded" />
+            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); clearPreview(); }}
+              className="absolute top-2 right-2 bg-red-600 rounded-full p-1"
+            >
+              <FaTimes className="text-white" />
+            </button>
+          </div>
         ) : (
-          <p className="text-gray-400">Tap to take Photo/Video (Camera enabled in APK)</p>
+          <div className="flex flex-col items-center gap-2 text-gray-400">
+            <FaCamera size={40} />
+            <p>Tap to choose photo or video</p>
+          </div>
         )}
         <input
           ref={fileRef}
@@ -75,7 +93,7 @@ export default function Upload() {
         />
       </div>
       <textarea
-        className="w-full bg-gray-800 p-3 rounded mt-4"
+        className="w-full bg-gray-800 text-white p-4 rounded-xl mt-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
         placeholder="Write a caption..."
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -84,10 +102,10 @@ export default function Upload() {
       <button
         onClick={handleUpload}
         disabled={uploading}
-        className="w-full bg-blue-600 p-3 rounded font-bold mt-4 disabled:opacity-50"
+        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl mt-4 transition disabled:opacity-50"
       >
-        {uploading ? 'Uploading...' : 'Publish to Feed'}
+        {uploading ? 'Uploading...' : 'Publish'}
       </button>
     </div>
   );
-        }
+      }
