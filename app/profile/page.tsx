@@ -1,10 +1,12 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { FaCamera, FaSignOutAlt, FaEdit, FaCheck, FaTimes, FaHeart, FaUsers, FaPlus, FaClock } from 'react-icons/fa';
+import { FaCamera, FaSignOutAlt, FaEdit, FaCheck, FaTimes, FaHeart, FaUsers, FaPlus, FaClock, FaCheckCircle } from 'react-icons/fa';
 import Image from 'next/image';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+
+// Admin user (your username)
+const ADMIN_USERNAME = 'crypty';
 
 export default function Profile() {
   const { user, loading, login, logout, updateUser } = useAuth();
@@ -15,7 +17,6 @@ export default function Profile() {
   const [isLogin, setIsLogin] = useState(true);
   const [error, setError] = useState('');
 
-  // Profile edit states
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
@@ -26,9 +27,10 @@ export default function Profile() {
   const [followers, setFollowers] = useState<string[]>([]);
   const [following, setFollowing] = useState<string[]>([]);
   const [totalLikes, setTotalLikes] = useState(0);
+  const [isVerified, setIsVerified] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Load user data
   useEffect(() => {
     if (user) {
       setDisplayName(user.displayName || user.email);
@@ -38,12 +40,16 @@ export default function Profile() {
       setFollowers(user.followers || []);
       setFollowing(user.following || []);
 
-      // Load user's posts
+      // Check if this is the admin user
+      if (user.username === ADMIN_USERNAME) {
+        setIsVerified(true);
+        setIsAdmin(true);
+      }
+
       const allPosts = JSON.parse(localStorage.getItem('chatup_posts') || '[]');
       const myPosts = allPosts.filter((p: any) => p.userId === user.id);
       setUserPosts(myPosts);
 
-      // Load stories (only those not expired)
       const allStories = JSON.parse(localStorage.getItem('chatup_stories') || '[]');
       const now = new Date().getTime();
       const validStories = allStories.filter((s: any) => 
@@ -51,7 +57,6 @@ export default function Profile() {
       );
       setUserStories(validStories);
 
-      // Count total likes
       let likes = 0;
       myPosts.forEach((p: any) => likes += (p.likes || 0));
       setTotalLikes(likes);
@@ -68,7 +73,6 @@ export default function Profile() {
       users[index].bio = bio;
       users[index].photoURL = photoURL;
       localStorage.setItem('chatup_users', JSON.stringify(users));
-      // Update current user
       const updatedUser = { ...user, displayName, username, bio, photoURL };
       localStorage.setItem('chatup_user', JSON.stringify(updatedUser));
       updateUser(updatedUser);
@@ -86,9 +90,6 @@ export default function Profile() {
     };
     reader.readAsDataURL(file);
   };
-
-  // Toggle follow/unfollow (if viewing another profile – we'll keep it simple)
-  // For now we only show our own profile; follow/unfollow will be added later.
 
   if (loading) {
     return (
@@ -162,13 +163,10 @@ export default function Profile() {
     );
   }
 
-  // TikTok-style Profile (logged in)
   return (
     <div className="min-h-screen bg-black pb-24">
-      {/* Profile Header */}
       <div className="bg-gradient-to-b from-gray-900 to-black p-6">
         <div className="flex flex-col items-center relative">
-          {/* Profile Picture with Edit */}
           <div className="relative">
             <div
               onClick={() => fileRef.current?.click()}
@@ -197,7 +195,6 @@ export default function Profile() {
             </button>
           </div>
 
-          {/* Display Name & Username */}
           <div className="mt-3 text-center">
             {isEditing ? (
               <div className="space-y-2">
@@ -237,7 +234,19 @@ export default function Profile() {
               </div>
             ) : (
               <>
-                <h2 className="text-xl font-bold text-white">{displayName}</h2>
+                <h2 className={`text-xl font-bold ${isAdmin ? 'text-yellow-400' : 'text-white'}`}>
+                  {displayName}
+                  {isVerified && (
+                    <span className="ml-1 text-blue-500" title="Verified">
+                      <FaCheckCircle className="inline" size={18} />
+                    </span>
+                  )}
+                  {isAdmin && (
+                    <span className="ml-2 text-xs bg-yellow-500 text-black px-2 py-0.5 rounded-full">
+                      Admin
+                    </span>
+                  )}
+                </h2>
                 <p className="text-gray-400 text-sm">@{username}</p>
                 {bio && <p className="text-gray-300 text-sm mt-1">{bio}</p>}
                 <button
@@ -250,7 +259,6 @@ export default function Profile() {
             )}
           </div>
 
-          {/* Stats: Following, Followers, Likes */}
           <div className="flex gap-6 mt-4 text-center">
             <div>
               <p className="text-white font-bold">{following.length}</p>
@@ -266,7 +274,6 @@ export default function Profile() {
             </div>
           </div>
 
-          {/* Logout Button */}
           <button
             onClick={logout}
             className="mt-4 flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-full text-sm transition"
@@ -276,7 +283,6 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* Stories Section (horizontal scroll) */}
       {userStories.length > 0 && (
         <div className="px-4 mt-4">
           <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
@@ -296,7 +302,6 @@ export default function Profile() {
         </div>
       )}
 
-      {/* Your Posts Grid (TikTok-style) */}
       <div className="px-2 mt-2">
         <div className="border-t border-gray-800 pt-4">
           <div className="flex justify-between items-center px-2 mb-3">
@@ -338,4 +343,4 @@ export default function Profile() {
       <p className="text-gray-600 text-center text-xs mt-6">Data stored locally on your device</p>
     </div>
   );
-}
+    }
