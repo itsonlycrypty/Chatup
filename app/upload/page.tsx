@@ -1,7 +1,7 @@
 'use client';
 import { useState, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { FaCamera, FaTimes, FaCheck, FaClock } from 'react-icons/fa';
+import { FaCamera, FaTimes, FaCheck, FaClock, FaLink } from 'react-icons/fa';
 import { useRouter } from 'next/navigation';
 
 export default function Upload() {
@@ -10,6 +10,7 @@ export default function Upload() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [text, setText] = useState('');
+  const [externalUrl, setExternalUrl] = useState('');
   const [uploading, setUploading] = useState(false);
   const [postType, setPostType] = useState<'post' | 'story'>('post');
   const fileRef = useRef<HTMLInputElement>(null);
@@ -19,44 +20,39 @@ export default function Upload() {
     if (f) {
       setFile(f);
       setPreview(URL.createObjectURL(f));
+      setExternalUrl(''); // clear URL if file selected
     }
   };
 
   const handleUpload = async () => {
-    if (!file || !user) return alert('Select a file');
+    if (!user) return alert('Please login first');
+    if (!file && !externalUrl.trim()) return alert('Select a file or paste a URL');
+
     setUploading(true);
     try {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = async () => {
-        const dataUrl = reader.result as string;
-        const newItem = {
-          id: Date.now().toString(),
-          text,
-          media: dataUrl,
-          userId: user.id,
-          likes: 0,
-          timestamp: new Date().toISOString(),
-          type: postType,
-        };
+      let media = '';
+      if (file) {
+        const reader = new FileReader();
+        const dataUrl = await new Promise<string>((resolve) => {
+          reader.onload = (e) => resolve(e.target?.result as string);
+          reader.readAsDataURL(file);
+        });
+        media = dataUrl;
+      } else {
+        media = externalUrl.trim(); // external link
+      }
 
-        if (postType === 'story') {
-          const stories = JSON.parse(localStorage.getItem('chatup_stories') || '[]');
-          stories.push({
-            ...newItem,
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-          });
-          localStorage.setItem('chatup_stories', JSON.stringify(stories));
-        } else {
-          const posts = JSON.parse(localStorage.getItem('chatup_posts') || '[]');
-          posts.unshift(newItem);
-          localStorage.setItem('chatup_posts', JSON.stringify(posts));
-        }
-        alert(`${postType === 'story' ? 'Story' : 'Post'} uploaded!`);
-        router.push('/feed');
-      };
+      const endpoint = postType === 'story' ? '/api/stories' : '/api/posts';
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, media, userId: user.id, type: postType }),
+      });
+      if (!res.ok) throw new Error('Upload failed');
+      alert('Uploaded!');
+      router.push('/feed');
     } catch (err: any) {
-      alert('Upload failed: ' + err.message);
+      alert(err.message);
     }
     setUploading(false);
   };
@@ -72,6 +68,7 @@ export default function Upload() {
       <div className="w-full max-w-md bg-gray-800/50 backdrop-blur-md rounded-3xl p-6 border border-gray-700">
         <h1 className="text-2xl font-bold text-white text-center mb-6">Create New</h1>
 
+        {/* File picker */}
         <div
           onClick={() => fileRef.current?.click()}
           className="border-2 border-dashed border-gray-600 rounded-2xl p-6 text-center cursor-pointer hover:border-blue-500 transition"
@@ -106,6 +103,20 @@ export default function Upload() {
           />
         </div>
 
+        {/* OR External URL */}
+        <div className="mt-4 relative">
+          <FaLink className="absolute left-3 top-3 text-gray-400" />
+          <input
+            className="w-full bg-gray-700/50 text-white pl-10 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Or paste video/image URL (from other apps)"
+            value={externalUrl}
+            onChange={(e) => {
+              setExternalUrl(e.target.value);
+              if (e.target.value) { clearPreview(); } // clear file if URL is entered
+            }}
+          />
+        </div>
+
         <textarea
           className="w-full bg-gray-700/50 text-white p-4 rounded-xl mt-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
           placeholder="Add a caption..."
@@ -118,9 +129,7 @@ export default function Upload() {
           <button
             onClick={() => setPostType('post')}
             className={`flex-1 py-2 rounded-full text-sm font-semibold transition ${
-              postType === 'post'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-700 text-gray-400'
+              postType === 'post' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'
             }`}
           >
             <FaCheck className="inline mr-1" /> Post
@@ -128,9 +137,7 @@ export default function Upload() {
           <button
             onClick={() => setPostType('story')}
             className={`flex-1 py-2 rounded-full text-sm font-semibold transition ${
-              postType === 'story'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-700 text-gray-400'
+              postType === 'story' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-400'
             }`}
           >
             <FaClock className="inline mr-1" /> Story (24h)
@@ -139,7 +146,7 @@ export default function Upload() {
 
         <button
           onClick={handleUpload}
-          disabled={uploading || !file}
+          disabled={uploading || (!file && !externalUrl.trim())}
           className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl mt-4 transition disabled:opacity-50"
         >
           {uploading ? 'Uploading...' : 'Publish'}
@@ -154,4 +161,4 @@ export default function Upload() {
       </div>
     </div>
   );
-                                                          }
+    }
