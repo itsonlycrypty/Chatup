@@ -1,26 +1,25 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, getDocs } from 'firebase/firestore';
-import Link from 'next/link';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import Link from 'next/link';
 import { FaUserCircle } from 'react-icons/fa';
 
 export default function ChatList() {
   const { user } = useAuth();
-  const [users, setUsers] = useState<{ id: string; email: string; displayName?: string }[]>([]);
+  const [users, setUsers] = useState<{ id: string; email: string }[]>([]);
 
   useEffect(() => {
-    if (!user || !db) return;
+    // In a real app, we'd fetch users from the server
+    // For now, we'll use a placeholder
     const fetchUsers = async () => {
-      const snap = await getDocs(collection(db!, 'users'));
-      const list = snap.docs
-        .map((d) => ({ id: d.id, ...d.data() } as { id: string; email: string; displayName?: string }))
-        .filter((u) => u.id !== user.uid);
-      setUsers(list);
+      // Get all users from Redis (you can add this API endpoint)
+      // For now, show a placeholder
+      setUsers([
+        { id: '1', email: 'demo@example.com' },
+      ]);
     };
     fetchUsers();
-  }, [user]);
+  }, []);
 
   return (
     <div className="p-4 pb-24 max-w-md mx-auto">
@@ -30,11 +29,10 @@ export default function ChatList() {
         <Link key={u.id} href={`/chat/${u.id}`} className="flex items-center gap-4 bg-gray-800 hover:bg-gray-700 p-4 rounded-2xl mb-3 transition">
           <FaUserCircle size={40} className="text-gray-400" />
           <div>
-            <p className="text-white font-semibold">{u.displayName || u.email}</p>
-            <p className="text-gray-400 text-sm">{u.email}</p>
+            <p className="text-white font-semibold">{u.email}</p>
           </div>
         </Link>
       ))}
     </div>
   );
-}
+      }
