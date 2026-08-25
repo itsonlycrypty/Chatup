@@ -1,13 +1,13 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FaComments, FaPlusCircle, FaUser } from 'react-icons/fa';
+import { FaHome, FaComments, FaUser } from 'react-icons/fa';
 
 export default function BottomNav() {
   const path = usePathname();
   const links = [
+    { href: '/feed', icon: FaHome, label: 'Feed' },
     { href: '/chat', icon: FaComments, label: 'Chat' },
-    { href: '/upload', icon: FaPlusCircle, label: 'Upload' }, // triggers modal, but we'll handle via a floating button
     { href: '/profile', icon: FaUser, label: 'Profile' },
   ];
   return (
