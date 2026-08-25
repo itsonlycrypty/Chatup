@@ -5,9 +5,6 @@ import { FaCamera, FaTimes, FaCheck, FaClock, FaLink } from 'react-icons/fa';
 import { useRouter } from 'next/navigation';
 import { fetchData, saveData } from '@/lib/db';
 
-const CLOUD_NAME = 'jtdafdgp';
-const UPLOAD_PRESET = 'chatup';
-
 export default function Upload() {
   const { user } = useAuth();
   const router = useRouter();
@@ -28,19 +25,6 @@ export default function Upload() {
     }
   };
 
-  const uploadToCloudinary = async (file: File): Promise<string> => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', UPLOAD_PRESET);
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/upload`, {
-      method: 'POST',
-      body: formData,
-    });
-    if (!res.ok) throw new Error('Cloudinary upload failed');
-    const data = await res.json();
-    return data.secure_url;
-  };
-
   const handleUpload = async () => {
     if (!user) return alert('Please login first');
     if (!file && !externalUrl.trim()) return alert('Select a file or paste a URL');
@@ -49,7 +33,13 @@ export default function Upload() {
     try {
       let media = '';
       if (file) {
-        media = await uploadToCloudinary(file);
+        // Convert to base64
+        const reader = new FileReader();
+        const dataUrl = await new Promise<string>((resolve) => {
+          reader.onload = (e) => resolve(e.target?.result as string);
+          reader.readAsDataURL(file);
+        });
+        media = dataUrl;
       } else {
         media = externalUrl.trim();
       }
@@ -158,4 +148,4 @@ export default function Upload() {
       </div>
     </div>
   );
-  }
+            }
