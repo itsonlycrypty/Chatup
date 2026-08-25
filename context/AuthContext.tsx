@@ -1,7 +1,6 @@
 'use client';
 import { createContext, useContext, useState, useEffect } from 'react';
 
-// 🔥 YOUR JSONBIN CREDENTIALS
 const BIN_ID = '6a8e0fb3da38895dfe106f8c';
 const API_KEY = '$2a$10$r1kHroezSkMDu0f2HTVOQerg29AfetwH4AAKa6X8TDTIbliIda/OS';
 
@@ -10,6 +9,7 @@ const AuthContext = createContext<any>({});
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [allUsers, setAllUsers] = useState([]); // for follow/unfollow
 
   const fetchData = async () => {
     const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
@@ -37,8 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!found) {
       const username = email.split('@')[0];
-      // ✅ Admin check – supports both "crypty" and "Onlycrypty"
-      const isAdmin = username === 'crypty' || username === 'Onlycrypty';
+      const isAdmin = username === 'Onlycrypty' || username === 'crypty';
       found = {
         id: Date.now().toString(),
         email,
@@ -55,10 +54,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       users.push(found);
       await saveData({ ...data, users });
     } else {
-      // ✅ If user already exists, ensure admin flag is correct
       const username = found.username || email.split('@')[0];
-      const shouldBeAdmin = username === 'crypty' || username === 'Onlycrypty';
-      if (shouldBeAdmin && !found.isAdmin) {
+      const shouldBeAdmin = username === 'Onlycrypty' || username === 'crypty';
+      if (shouldBeAdmin) {
         found.isAdmin = true;
         found.isVerified = true;
         const idx = users.findIndex((u: any) => u.id === found.id);
@@ -67,13 +65,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await saveData({ ...data, users });
         }
       }
-      if (found.pin !== pin) {
-        throw new Error('Incorrect PIN');
-      }
+      if (found.pin !== pin) throw new Error('Incorrect PIN');
     }
 
     localStorage.setItem('user', JSON.stringify(found));
     setUser(found);
+    setAllUsers(users);
     return found;
   };
 
@@ -91,19 +88,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await saveData({ ...data, users });
       setUser(users[idx]);
       localStorage.setItem('user', JSON.stringify(users[idx]));
+      setAllUsers(users);
     }
+  };
+
+  const refreshUsers = async () => {
+    const data = await fetchData();
+    setAllUsers(data.users || []);
+    return data.users || [];
   };
 
   useEffect(() => {
     const saved = localStorage.getItem('user');
     if (saved) {
-      setUser(JSON.parse(saved));
+      const parsed = JSON.parse(saved);
+      if (parsed.username === 'Onlycrypty' || parsed.username === 'crypty') {
+        parsed.isAdmin = true;
+        parsed.isVerified = true;
+        localStorage.setItem('user', JSON.stringify(parsed));
+      }
+      setUser(parsed);
+      refreshUsers().then(users => setAllUsers(users));
     }
     setLoading(false);
   }, []);
 
+  const followUser = async (targetUserId: string) => {
+    if (!user) return;
+    const users = await refreshUsers();
+    const current = users.find((u: any) => u.id === user.id);
+    const target = users.find((u: any) => u.id === targetUserId);
+    if (!current || !target) return;
+    if (!current.following) current.following = [];
+    if (!target.followers) target.followers = [];
+    const already = current.following.includes(targetUserId);
+    if (already) {
+      current.following = current.following.filter((id: string) => id !== targetUserId);
+      target.followers = target.followers.filter((id: string) => id !== user.id);
+    } else {
+      current.following.push(targetUserId);
+      target.followers.push(user.id);
+    }
+    const data = await fetchData();
+    data.users = users;
+    await saveData(data);
+    setAllUsers(users);
+    // update current user
+    const updatedUser = users.find((u: any) => u.id === user.id);
+    setUser(updatedUser);
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, updateUser, allUsers, followUser, refreshUsers }}>
       {children}
     </AuthContext.Provider>
   );
