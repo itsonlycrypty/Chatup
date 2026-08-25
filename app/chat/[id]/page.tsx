@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 
 export default function ChatRoom() {
-  const { id } = useParams<{ id: string }>(); // recipient UID
+  const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState('');
@@ -17,8 +17,7 @@ export default function ChatRoom() {
 
   useEffect(() => {
     if (!user || !id) return;
-    if (!db) return; // ✅ Stop if Firebase not initialized
-    // Fetch recipient name
+    if (!db) return;
     const fetchName = async () => {
       const docSnap = await getDoc(doc(db, 'users', id));
       if (docSnap.exists()) {
@@ -50,7 +49,7 @@ export default function ChatRoom() {
 
   return (
     <div className="p-4 h-[85vh] flex flex-col pb-24">
-      <h2 className="text-xl font-bold mb-4">Chat with {recipientName}</h2>
+      <h2 className="text-xl font-bold text-white mb-4">Chat with {recipientName}</h2>
       <div className="flex-1 overflow-y-auto space-y-2">
         {messages.map((m) => (
           <div
@@ -66,16 +65,16 @@ export default function ChatRoom() {
       </div>
       <div className="flex gap-2 mt-4">
         <input
-          className="flex-1 bg-gray-800 p-3 rounded"
+          className="flex-1 bg-gray-800 text-white p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
           placeholder="Type a message..."
         />
-        <button onClick={sendMessage} className="bg-blue-600 px-6 rounded">
+        <button onClick={sendMessage} className="bg-blue-600 hover:bg-blue-700 px-6 rounded-xl font-semibold transition">
           Send
         </button>
       </div>
     </div>
   );
-        }
+    }
