@@ -9,7 +9,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!loading) {
-      router.push('/profile');
+      router.push('/feed');
     }
   }, [loading, router]);
 
