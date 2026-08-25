@@ -7,9 +7,6 @@ import { useRouter } from 'next/navigation';
 import FloatingPlusButton from '@/components/FloatingPlusButton';
 import { fetchData } from '@/lib/db';
 
-const CLOUD_NAME = 'jtdafdgp';
-const UPLOAD_PRESET = 'chatup';
-
 export default function Profile() {
   const { user, loading, login, logout, updateUser } = useAuth();
   const router = useRouter();
@@ -63,27 +60,19 @@ export default function Profile() {
     if (user) loadUserData();
   }, [user]);
 
-  const uploadToCloudinary = async (file: File): Promise<string> => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', UPLOAD_PRESET);
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/upload`, {
-      method: 'POST',
-      body: formData,
-    });
-    if (!res.ok) throw new Error('Cloudinary upload failed');
-    const data = await res.json();
-    return data.secure_url;
-  };
-
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const url = await uploadToCloudinary(file);
-      setPhotoURL(url);
-      // Immediately update user in context and localStorage
-      await updateUser({ userId: user.id, photoURL: url });
+      // Convert to base64
+      const reader = new FileReader();
+      const dataUrl = await new Promise<string>((resolve) => {
+        reader.onload = (ev) => resolve(ev.target?.result as string);
+        reader.readAsDataURL(file);
+      });
+      setPhotoURL(dataUrl);
+      // Save to JSONBin via updateUser
+      await updateUser({ userId: user.id, photoURL: dataUrl });
     } catch (err: any) {
       alert('Upload failed: ' + err.message);
     }
@@ -327,4 +316,4 @@ export default function Profile() {
       <FloatingPlusButton />
     </div>
   );
-}
+    }
