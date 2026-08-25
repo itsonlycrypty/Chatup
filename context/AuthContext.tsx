@@ -1,7 +1,15 @@
 'use client';
 import { createContext, useContext, useState, useEffect } from 'react';
 
-const AuthContext = createContext<any>({});
+interface AuthContextType {
+  user: any;
+  loading: boolean;
+  login: (email: string, pin: string) => Promise<void>;
+  logout: () => void;
+  updateUser: (updatedUser: any) => void;
+}
+
+const AuthContext = createContext<AuthContextType>({} as any);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState(null);
@@ -14,19 +22,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = (email: string, pin: string) => {
-    // Check if user exists
     const users = JSON.parse(localStorage.getItem('chatup_users') || '[]');
     let found = users.find((u: any) => u.email === email);
-    
+
     if (!found) {
-      // Create new user
-      found = { id: Date.now().toString(), email, pin };
+      found = {
+        id: Date.now().toString(),
+        email,
+        pin,
+        displayName: email.split('@')[0],
+        username: email.split('@')[0],
+        bio: '',
+        photoURL: '',
+        followers: [],
+        following: [],
+      };
       users.push(found);
       localStorage.setItem('chatup_users', JSON.stringify(users));
     } else if (found.pin !== pin) {
       throw new Error('Incorrect PIN');
     }
-    
+
     localStorage.setItem('chatup_user', JSON.stringify(found));
     setUser(found);
   };
@@ -36,7 +52,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
-  return <AuthContext.Provider value={{ user, loading, login, logout }}>{children}</AuthContext.Provider>;
+  const updateUser = (updatedUser: any) => {
+    setUser(updatedUser);
+    localStorage.setItem('chatup_user', JSON.stringify(updatedUser));
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, loading, login, logout, updateUser }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export const useAuth = () => useContext(AuthContext);
