@@ -28,55 +28,48 @@ export default function Feed() {
   // Load shorts from database (filter out demos)
   const loadShortsFromDB = async () => {
     const data = await fetchData();
-    // Keep only shorts that are from 'tiktok_bot' and have a valid ID starting with 'tt_'
     const allShorts = (data.shorts || []).filter((s: any) => {
       const isExpired = new Date(s.expiresAt).getTime() <= new Date().getTime();
-      const isValid = s.id && s.id.startsWith('tt_');
+      const isValid = s.id && (s.id.startsWith('yt_') || s.id.startsWith('tt_'));
       return !isExpired && isValid;
     });
     setShorts(allShorts);
   };
 
-  // Cleanup function: removes any shorts that are not valid TikTok shorts
+  // Cleanup function: removes any shorts that are not valid
   const cleanupDatabase = async () => {
     const data = await fetchData();
     let shorts = data.shorts || [];
-    // Remove shorts that don't have a valid TikTok ID or are from youtube_bot
     const validShorts = shorts.filter((s: any) => {
-      if (s.userId === 'youtube_bot') return false;
-      if (!s.id || !s.id.startsWith('tt_')) return false;
-      return true;
+      if (!s.id) return false;
+      return s.id.startsWith('yt_') || s.id.startsWith('tt_');
     });
     if (validShorts.length !== shorts.length) {
       await saveData({ ...data, shorts: validShorts });
-      console.log('🧹 Cleaned up invalid shorts from database');
+      console.log('🧹 Cleaned up invalid shorts');
     }
     return validShorts;
   };
 
-  // Fetch real TikTok videos
-  const fetchTikTokVideos = async () => {
+  // Fetch videos from our API (which now uses YouTube)
+  const fetchVideos = async () => {
     setLoading(true);
     setError(null);
     try {
-      // First, clean up any existing invalid shorts
       await cleanupDatabase();
-
       const res = await fetch('/api/tiktok');
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || 'API error');
       }
       const data = await res.json();
-      if (data.error) {
-        throw new Error(data.error);
-      }
+      if (data.error) throw new Error(data.error);
       if (data.data && data.data.length > 0) {
         const items = data.data.map((item: any) => ({
-          id: `tt_${item.id}`,
+          id: `yt_${item.id}`,
           text: item.title || item.desc || '',
           media: item.video || item.play || '',
-          userId: 'tiktok_bot',
+          userId: 'youtube_bot',
           likes: 0,
           likedBy: [],
           comments: [],
@@ -84,11 +77,9 @@ export default function Feed() {
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         }));
         setShorts(items);
-        // Save to database
         const binData = await fetchData();
         let existingShorts = binData.shorts || [];
-        // Remove any old tiktok_bot shorts (we'll replace with fresh ones)
-        existingShorts = existingShorts.filter((s: any) => s.userId !== 'tiktok_bot');
+        existingShorts = existingShorts.filter((s: any) => s.userId !== 'youtube_bot');
         const allShorts = [...items, ...existingShorts];
         await saveData({ ...binData, shorts: allShorts });
       } else {
@@ -102,13 +93,12 @@ export default function Feed() {
   };
 
   useEffect(() => {
-    // On mount: load from DB, clean up once, and fetch fresh
     const init = async () => {
       await cleanupDatabase();
       await loadShortsFromDB();
       if (!hasFetched.current) {
         hasFetched.current = true;
-        await fetchTikTokVideos();
+        await fetchVideos();
       }
     };
     init();
@@ -116,7 +106,7 @@ export default function Feed() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchTikTokVideos();
+    await fetchVideos();
     setRefreshing(false);
   };
 
@@ -211,7 +201,8 @@ export default function Feed() {
   const renderShort = (s: any) => {
     const postUser = getUser(s.userId);
     const isFollowingUser = isFollowing(s.userId);
-    const displayName = s.userId === 'tiktok_bot' ? 'TikTok' : (postUser?.displayName || 'Unknown');
+    // 🟢 CHANGED: Display name is now "Chat Up Shorts"
+    const displayName = s.userId === 'youtube_bot' ? 'Chat Up Shorts' : (postUser?.displayName || 'Unknown');
     const hasLiked = user && s.likedBy?.includes(user.id);
 
     return (
@@ -223,7 +214,7 @@ export default function Feed() {
         <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
 
         <div className="absolute bottom-28 left-4 right-20 z-10">
-          <Link href={s.userId === 'tiktok_bot' ? '#' : `/profile/${s.userId}`} className="flex items-center gap-2">
+          <Link href={s.userId === 'youtube_bot' ? '#' : `/profile/${s.userId}`} className="flex items-center gap-2">
             {postUser?.photoURL ? (
               <Image src={postUser.photoURL} alt="Avatar" width={32} height={32} className="w-8 h-8 rounded-full object-cover border-2 border-white" />
             ) : (
@@ -235,7 +226,7 @@ export default function Feed() {
               {postUser?.isVerified && <span className="ml-1 text-blue-400 text-xs">✓</span>}
             </span>
           </Link>
-          {user && postUser && postUser.id !== user.id && postUser.id !== 'tiktok_bot' && (
+          {user && postUser && postUser.id !== user.id && postUser.id !== 'youtube_bot' && (
             <button
               onClick={() => followUser(postUser.id)}
               className={`text-xs px-3 py-1 rounded-full transition ${
@@ -321,7 +312,7 @@ export default function Feed() {
           <div className="text-center">
             <div className="text-red-400 text-5xl mb-4">📹</div>
             <p className="text-gray-400 mb-4">{error}</p>
-            <button onClick={fetchTikTokVideos} className="bg-blue-600 px-6 py-2 rounded-full text-white">Retry</button>
+            <button onClick={fetchVideos} className="bg-blue-600 px-6 py-2 rounded-full text-white">Retry</button>
           </div>
         </div>
       ) : shorts.length === 0 ? (
@@ -384,4 +375,4 @@ export default function Feed() {
       )}
     </div>
   );
-}
+    }
