@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { FaHeart, FaSearch, FaComment, FaPaperPlane, FaUserPlus, FaUserCheck, FaShare, FaVideo, FaTimes } from 'react-icons/fa';
+import { FaHeart, FaSearch, FaComment, FaPaperPlane, FaUserPlus, FaUserCheck, FaShare, FaVideo, FaTimes, FaYoutube } from 'react-icons/fa';
 import Image from 'next/image';
 import FloatingPlusButton from '@/components/FloatingPlusButton';
 import { useAuth } from '@/context/AuthContext';
@@ -19,6 +19,7 @@ export default function Feed() {
   const [searchVideos, setSearchVideos] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
   const [activeTab, setActiveTab] = useState<'users' | 'videos'>('users');
+  const [fetchingTrending, setFetchingTrending] = useState(false);
 
   const loadPosts = async () => {
     const data = await fetchData();
@@ -87,9 +88,51 @@ export default function Feed() {
     return user.following?.includes(userId) || false;
   };
 
+  // 🎥 Fetch trending YouTube videos and add them to the feed
+  const fetchTrending = async () => {
+    if (!YOUTUBE_API_KEY) {
+      alert('YouTube API key missing. Add NEXT_PUBLIC_YOUTUBE_API_KEY to your environment variables.');
+      return;
+    }
+    setFetchingTrending(true);
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&maxResults=10&key=${YOUTUBE_API_KEY}&regionCode=US`
+      );
+      const data = await res.json();
+      if (data.items && data.items.length > 0) {
+        const youtubePosts = data.items.map((item: any) => ({
+          id: `yt_${item.id}`,
+          text: item.snippet.title,
+          media: `https://www.youtube.com/watch?v=${item.id}`,
+          userId: 'youtube_bot',
+          likes: 0,
+          comments: [],
+          timestamp: new Date().toISOString(),
+          type: 'post',
+        }));
+
+        const binData = await fetchData();
+        const existingPosts = binData.posts || [];
+        // Combine: new trending videos first, then existing posts (avoid duplicates by video ID)
+        const existingIds = new Set(existingPosts.map((p: any) => p.id));
+        const newPosts = youtubePosts.filter((p: any) => !existingIds.has(p.id));
+        const allPosts = [...newPosts, ...existingPosts];
+        await saveData({ ...binData, posts: allPosts });
+        alert(`${newPosts.length} trending videos added to feed!`);
+        loadPosts();
+      } else {
+        alert('No trending videos found.');
+      }
+    } catch (err: any) {
+      alert('Failed to fetch trending: ' + err.message);
+    }
+    setFetchingTrending(false);
+  };
+
   const searchYouTube = async (query: string) => {
     if (!YOUTUBE_API_KEY) {
-      alert('YouTube API key not set. Add NEXT_PUBLIC_YOUTUBE_API_KEY to your environment variables.');
+      alert('YouTube API key not set.');
       return [];
     }
     try {
@@ -150,25 +193,40 @@ export default function Feed() {
     <div className="min-h-screen bg-black pb-24">
       <div className="flex justify-between items-center p-4 border-b border-gray-800">
         <h1 className="text-2xl font-bold text-white">Feed</h1>
-        <button onClick={openSearch} className="text-white hover:text-blue-400">
-          <FaSearch size={24} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={fetchTrending}
+            disabled={fetchingTrending}
+            className="text-red-500 hover:text-red-400 transition disabled:opacity-50"
+            title="Add trending YouTube videos to feed"
+          >
+            <FaYoutube size={24} />
+          </button>
+          <button onClick={openSearch} className="text-white hover:text-blue-400">
+            <FaSearch size={24} />
+          </button>
+        </div>
       </div>
 
       {posts.length === 0 ? (
-        <p className="text-gray-400 text-center py-20">No posts yet. Tap + to upload!</p>
+        <p className="text-gray-400 text-center py-20">No posts yet. Tap + to upload or fetch trending!</p>
       ) : (
         <div className="space-y-6 p-2">
           {posts.map((p) => {
             const postUser = getUser(p.userId);
             const isFollowingUser = isFollowing(p.userId);
             const isExternal = p.media && p.media.startsWith('http');
+            const isYoutube = p.media && p.media.includes('youtube.com');
             return (
               <div key={p.id} className="bg-gray-900 rounded-2xl overflow-hidden">
                 <div className="flex items-center justify-between p-3">
                   <div className="flex items-center gap-3">
                     {postUser?.photoURL ? (
                       <Image src={postUser.photoURL} alt="Avatar" width={32} height={32} className="w-8 h-8 rounded-full object-cover" />
+                    ) : p.userId === 'youtube_bot' ? (
+                      <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center text-white text-sm">
+                        <FaYoutube />
+                      </div>
                     ) : (
                       <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm">
                         {postUser?.displayName?.[0]?.toUpperCase() || 'U'}
@@ -176,14 +234,17 @@ export default function Feed() {
                     )}
                     <div>
                       <p className="text-white font-semibold text-sm">
-                        {postUser?.displayName || 'Unknown'}
+                        {p.userId === 'youtube_bot' ? 'YouTube Trending' : (postUser?.displayName || 'Unknown')}
                         {postUser?.isAdmin && <span className="ml-1 text-yellow-400 text-xs">⭐</span>}
                         {postUser?.isVerified && <span className="ml-1 text-blue-500 text-xs">✓</span>}
+                        {p.userId === 'youtube_bot' && <span className="ml-1 text-red-500 text-xs">🔥</span>}
                       </p>
-                      <p className="text-gray-400 text-xs">@{postUser?.username || ''}</p>
+                      <p className="text-gray-400 text-xs">
+                        {p.userId === 'youtube_bot' ? 'Trending on YouTube' : `@${postUser?.username || ''}`}
+                      </p>
                     </div>
                   </div>
-                  {user && postUser && postUser.id !== user.id && (
+                  {user && postUser && postUser.id !== user.id && postUser.id !== 'youtube_bot' && (
                     <button
                       onClick={() => followUser(postUser.id)}
                       className={`text-xs px-3 py-1 rounded-full transition ${
@@ -250,7 +311,7 @@ export default function Feed() {
 
                 {isExternal && (
                   <div className="px-3 pb-2 text-xs text-gray-500 flex items-center gap-1">
-                    <FaVideo /> Shared from external source
+                    <FaVideo /> {isYoutube ? 'YouTube' : 'External'} source
                   </div>
                 )}
               </div>
@@ -261,7 +322,7 @@ export default function Feed() {
 
       <FloatingPlusButton />
 
-      {/* Search Modal */}
+      {/* Search Modal (unchanged) */}
       {showSearch && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -329,11 +390,11 @@ export default function Feed() {
                 {searchVideos.length === 0 && searchQuery ? (
                   <p className="text-gray-400 text-center">No YouTube videos found</p>
                 ) : searchVideos.map((v) => (
-                  <div key={v.id} className="bg-gray-700 p-3 rounded-xl hover:bg-gray-600 transition cursor-pointer" onClick={() => {
-                    // Add the video as a post (optional)
-                    // For now, just open the video
-                    window.open(v.url, '_blank');
-                  }}>
+                  <div
+                    key={v.id}
+                    className="bg-gray-700 p-3 rounded-xl hover:bg-gray-600 transition cursor-pointer"
+                    onClick={() => window.open(v.url, '_blank')}
+                  >
                     <div className="flex items-center gap-3">
                       <img src={v.thumbnail} alt={v.title} className="w-20 h-12 object-cover rounded" />
                       <div className="flex-1">
