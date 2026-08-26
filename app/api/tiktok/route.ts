@@ -1,73 +1,77 @@
 import { NextResponse } from 'next/server';
 
-// Helper to fetch with timeout
-const fetchWithTimeout = async (url: string, options: any = {}, timeout = 8000) => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-  try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
-    clearTimeout(timeoutId);
-    return res;
-  } catch (error) {
-    clearTimeout(timeoutId);
-    throw error;
-  }
-};
+const LAMATOK_KEY = process.env.NEXT_PUBLIC_LAMATOK_KEY || 'euler_M2M3ZDJmNWU2M2ViYzkwNjQzYmM4OGI5YjhhYWYzYzA5YTAzMGQ2MzdiMDMzMjI0YTNkZTll';
 
 export async function GET() {
-  // Try multiple sources in order
-  const sources = [
-    {
-      name: 'TikWM',
-      url: 'https://www.tikwm.com/api/trending',
-      parser: (data: any) => data.data || [],
-    },
-    {
-      name: 'TikTokAPI (alternative)',
-      url: 'https://api.tiktokapi.com/trending',
-      parser: (data: any) => data.data || [],
-    },
-    {
-      name: 'SocialBlade (TikTok)',
-      url: 'https://socialblade.com/api/tiktok/trending',
-      parser: (data: any) => data.data || [],
-    },
-  ];
-
-  for (const source of sources) {
-    try {
-      const res = await fetchWithTimeout(source.url, {
+  try {
+    // Use the search endpoint with a trending query
+    const res = await fetch(
+      `https://api.lamatok.com/v1/search?q=trending&count=20`,
+      {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept': 'application/json',
+          'Authorization': `Bearer ${LAMATOK_KEY}`,
+          'Content-Type': 'application/json',
         },
-      }, 6000);
-      
-      if (res.ok) {
-        const data = await res.json();
-        const items = source.parser(data);
-        if (items && items.length > 0) {
-          // Normalize the data
-          const normalized = items.map((item: any) => ({
-            id: item.id || item.video_id || `tt_${Math.random().toString(36)}`,
-            title: item.title || item.desc || item.description || 'TikTok Video',
-            desc: item.desc || item.description || '',
-            video: item.video || item.play || item.video_url || item.url || '',
-            play: item.play || item.video || item.video_url || item.url || '',
-            cover: item.cover || item.cover_url || '',
-          }));
-          return NextResponse.json({ data: normalized });
-        }
       }
-    } catch (e) {
-      console.log(`Source ${source.name} failed:`, e);
-      continue;
-    }
-  }
+    );
 
-  // If all sources fail, return a message
-  return NextResponse.json({
-    error: 'All TikTok sources failed. Please try again later.',
-    data: [],
-  }, { status: 503 });
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error('LamaTok error:', res.status, errorText);
+      throw new Error(`LamaTok API error: ${res.status} - ${errorText}`);
     }
+
+    const data = await res.json();
+
+    if (data.items && data.items.length > 0) {
+      const items = data.items.map((item: any) => ({
+        id: item.id || `tt_${Math.random().toString(36)}`,
+        title: item.title || item.description || 'TikTok Video',
+        desc: item.description || '',
+        video: item.video_url || item.url || '',
+        play: item.video_url || item.url || '',
+        cover: item.cover_url || '',
+      }));
+      return NextResponse.json({ data: items });
+    } else {
+      // If search returns nothing, try the trending endpoint
+      const trendingRes = await fetch(
+        `https://api.lamatok.com/v1/trending`,
+        {
+          headers: {
+            'Authorization': `Bearer ${LAMATOK_KEY}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      if (!trendingRes.ok) {
+        const errorText = await trendingRes.text();
+        console.error('LamaTok trending error:', trendingRes.status, errorText);
+        throw new Error('Both search and trending endpoints failed');
+      }
+      const trendingData = await trendingRes.json();
+      if (trendingData.items && trendingData.items.length > 0) {
+        const items = trendingData.items.map((item: any) => ({
+          id: item.id || `tt_${Math.random().toString(36)}`,
+          title: item.title || item.description || 'TikTok Video',
+          desc: item.description || '',
+          video: item.video_url || item.url || '',
+          play: item.video_url || item.url || '',
+          cover: item.cover_url || '',
+        }));
+        return NextResponse.json({ data: items });
+      } else {
+        return NextResponse.json(
+          { error: 'No videos found from LamaTok' },
+          { status: 404 }
+        );
+      }
+    }
+  } catch (error: any) {
+    console.error('LamaTok fetch error:', error);
+    return NextResponse.json(
+      { error: error.message || 'Failed to fetch from LamaTok' },
+      { status: 500 }
+    );
+  }
+        }
