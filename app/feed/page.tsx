@@ -7,6 +7,8 @@ import { useAuth } from '@/context/AuthContext';
 import { fetchData, saveData } from '@/lib/db';
 import VideoEmbed from '@/components/VideoEmbed';
 
+const YOUTUBE_API_KEY = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
+
 export default function Feed() {
   const { user, allUsers, followUser } = useAuth();
   const [posts, setPosts] = useState<any[]>([]);
@@ -17,7 +19,6 @@ export default function Feed() {
   const [searchVideos, setSearchVideos] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
   const [activeTab, setActiveTab] = useState<'users' | 'videos'>('users');
-  const [showVideoSearch, setShowVideoSearch] = useState(false);
 
   const loadPosts = async () => {
     const data = await fetchData();
@@ -74,7 +75,6 @@ export default function Feed() {
         });
       } catch (e) { /* user cancelled */ }
     } else {
-      // Fallback: copy to clipboard
       const text = `${post.text || 'Check out this post'} - ${post.media || ''}`;
       await navigator.clipboard?.writeText(text);
       alert('Link copied to clipboard!');
@@ -87,7 +87,33 @@ export default function Feed() {
     return user.following?.includes(userId) || false;
   };
 
-  // Search users and videos
+  const searchYouTube = async (query: string) => {
+    if (!YOUTUBE_API_KEY) {
+      alert('YouTube API key not set. Add NEXT_PUBLIC_YOUTUBE_API_KEY to your environment variables.');
+      return [];
+    }
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&key=${YOUTUBE_API_KEY}&maxResults=10&type=video`
+      );
+      const data = await res.json();
+      if (data.items) {
+        return data.items.map((item: any) => ({
+          id: item.id.videoId,
+          title: item.snippet.title,
+          description: item.snippet.description,
+          thumbnail: item.snippet.thumbnails.medium.url,
+          url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+          channel: item.snippet.channelTitle,
+        }));
+      }
+      return [];
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
+  };
+
   const performSearch = async (query: string) => {
     setSearchQuery(query);
     if (!query.trim()) {
@@ -95,9 +121,7 @@ export default function Feed() {
       setSearchVideos([]);
       return;
     }
-
     setSearching(true);
-    
     // Search users locally
     const data = await fetchData();
     const users = data.users || [];
@@ -108,21 +132,12 @@ export default function Feed() {
     );
     setSearchResults(filteredUsers);
 
-    // Search videos from the internet (YouTube)
-    try {
-      // For demo, we'll fetch from a free API or just show mock results
-      // In production, use YouTube Data API v3 with your API key
-      // For now, we'll show a message to paste YouTube URL
-      setSearchVideos([
-        { id: '1', title: 'Paste any YouTube/Instagram/TikTok URL to embed', url: '' },
-      ]);
-    } catch (e) {
-      console.error(e);
-    }
+    // Search YouTube
+    const videos = await searchYouTube(query);
+    setSearchVideos(videos);
     setSearching(false);
   };
 
-  // Open search modal
   const openSearch = () => {
     setShowSearch(true);
     setSearchQuery('');
@@ -150,7 +165,6 @@ export default function Feed() {
             const isExternal = p.media && p.media.startsWith('http');
             return (
               <div key={p.id} className="bg-gray-900 rounded-2xl overflow-hidden">
-                {/* User header with follow button */}
                 <div className="flex items-center justify-between p-3">
                   <div className="flex items-center gap-3">
                     {postUser?.photoURL ? (
@@ -182,7 +196,7 @@ export default function Feed() {
                   )}
                 </div>
 
-                {/* Media – using VideoEmbed for external URLs */}
+                {/* Media */}
                 {p.media && p.media.startsWith('data:image') && (
                   <Image src={p.media} alt="Post" width={400} height={400} className="w-full h-auto object-cover" />
                 )}
@@ -193,10 +207,8 @@ export default function Feed() {
                   <VideoEmbed url={p.media} />
                 )}
 
-                {/* Caption */}
                 {p.text && <div className="px-3 py-1"><p className="text-white text-sm">{p.text}</p></div>}
 
-                {/* Action buttons: Likes, Comments, Share */}
                 <div className="flex items-center gap-6 px-3 py-2 text-gray-400 text-sm">
                   <button onClick={() => like(p.id)} className="flex items-center gap-1 hover:text-red-400 transition">
                     <FaHeart className="text-red-400" /> {p.likes || 0}
@@ -209,7 +221,6 @@ export default function Feed() {
                   </button>
                 </div>
 
-                {/* Comments list */}
                 {(p.comments?.length || 0) > 0 && (
                   <div className="px-3 pb-2 space-y-1">
                     {p.comments.slice(-3).map((c: any) => (
@@ -222,7 +233,6 @@ export default function Feed() {
                   </div>
                 )}
 
-                {/* Comment input */}
                 {user && (
                   <div className="flex items-center gap-2 p-3 border-t border-gray-800">
                     <input
@@ -238,7 +248,6 @@ export default function Feed() {
                   </div>
                 )}
 
-                {/* Show "external source" tag */}
                 {isExternal && (
                   <div className="px-3 pb-2 text-xs text-gray-500 flex items-center gap-1">
                     <FaVideo /> Shared from external source
@@ -262,20 +271,18 @@ export default function Feed() {
                 <FaTimes />
               </button>
             </div>
-            
-            {/* Search input */}
+
             <div className="relative mb-4">
               <FaSearch className="absolute left-3 top-3 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search for users or videos..."
+                placeholder="Search users or YouTube videos..."
                 className="w-full bg-gray-700 text-white p-3 pl-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={searchQuery}
                 onChange={(e) => performSearch(e.target.value)}
               />
             </div>
 
-            {/* Tabs */}
             <div className="flex gap-2 mb-4">
               <button
                 onClick={() => setActiveTab('users')}
@@ -291,11 +298,10 @@ export default function Feed() {
                   activeTab === 'videos' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-400'
                 }`}
               >
-                Videos
+                YouTube
               </button>
             </div>
 
-            {/* Results */}
             {searching ? (
               <p className="text-gray-400 text-center">Searching...</p>
             ) : activeTab === 'users' ? (
@@ -321,20 +327,22 @@ export default function Feed() {
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {searchVideos.length === 0 && searchQuery ? (
-                  <div className="text-gray-400 text-center p-4">
-                    <p>To add a video from other apps:</p>
-                    <p className="text-xs mt-2">1. Copy the YouTube/Instagram/TikTok URL</p>
-                    <p className="text-xs">2. Go to Upload → paste the URL</p>
-                  </div>
+                  <p className="text-gray-400 text-center">No YouTube videos found</p>
                 ) : searchVideos.map((v) => (
-                  <div key={v.id} className="bg-gray-700 p-3 rounded-xl">
-                    <p className="text-white">{v.title}</p>
-                    {v.url && <p className="text-blue-400 text-xs break-all">{v.url}</p>}
+                  <div key={v.id} className="bg-gray-700 p-3 rounded-xl hover:bg-gray-600 transition cursor-pointer" onClick={() => {
+                    // Add the video as a post (optional)
+                    // For now, just open the video
+                    window.open(v.url, '_blank');
+                  }}>
+                    <div className="flex items-center gap-3">
+                      <img src={v.thumbnail} alt={v.title} className="w-20 h-12 object-cover rounded" />
+                      <div className="flex-1">
+                        <p className="text-white text-sm font-semibold truncate">{v.title}</p>
+                        <p className="text-gray-400 text-xs">{v.channel}</p>
+                      </div>
+                    </div>
                   </div>
                 ))}
-                <p className="text-gray-500 text-xs text-center mt-2">
-                  💡 Paste any YouTube/Instagram/TikTok URL in the upload page
-                </p>
               </div>
             )}
           </div>
