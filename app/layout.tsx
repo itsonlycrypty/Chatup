@@ -9,9 +9,9 @@ const inter = Inter({ subsets: ['latin'] });
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
-  
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 1500);
+    // Simulate 10‑15 seconds loading
+    const timer = setTimeout(() => setLoading(false), 12000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -39,4 +39,4 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </body>
     </html>
   );
-              }
+}
