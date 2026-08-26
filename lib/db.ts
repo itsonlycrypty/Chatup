@@ -7,10 +7,18 @@ export const fetchData = async () => {
       headers: { 'X-Master-Key': API_KEY }
     });
     const data = await res.json();
-    return data.record;
+    // Ensure all expected fields exist, including 'shorts'
+    const record = data.record || {};
+    return {
+      users: record.users || [],
+      posts: record.posts || [],
+      stories: record.stories || [],
+      chats: record.chats || {},
+      shorts: record.shorts || [],  // ← added shorts array
+    };
   } catch (e) {
     console.error('Fetch error:', e);
-    return { users: [], posts: [], stories: [], chats: {} };
+    return { users: [], posts: [], stories: [], chats: {}, shorts: [] };
   }
 };
 
