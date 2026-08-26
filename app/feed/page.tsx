@@ -2,7 +2,8 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   FaHeart, FaSearch, FaComment, FaPaperPlane, FaUserPlus, FaUserCheck,
-  FaShare, FaVideo, FaTimes, FaYoutube, FaSync, FaFire, FaClock
+  FaShare, FaVideo, FaTimes, FaYoutube, FaSync, FaFire, FaClock,
+  FaUserCircle
 } from 'react-icons/fa';
 import Image from 'next/image';
 import FloatingPlusButton from '@/components/FloatingPlusButton';
@@ -28,24 +29,20 @@ export default function Feed() {
   const [refreshing, setRefreshing] = useState(false);
   const hasFetched = useRef(false);
 
-  // Load posts and shorts
   const loadData = async () => {
     const data = await fetchData();
-    // Home posts: filter out shorts (we store shorts separately)
     const homePosts = (data.posts || []).filter((p: any) => p.type !== 'short');
     const sortedHome = homePosts.sort((a: any, b: any) =>
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
     setPosts(sortedHome);
 
-    // Shorts: filter valid shorts (not expired)
     const allShorts = (data.shorts || []).filter((s: any) =>
       new Date(s.expiresAt).getTime() > new Date().getTime()
     );
     setShorts(allShorts);
   };
 
-  // Fetch fresh trending and shorts from YouTube
   const fetchTrendingAndShorts = async () => {
     if (!YOUTUBE_API_KEY) {
       console.warn('YouTube API key missing');
@@ -53,14 +50,12 @@ export default function Feed() {
     }
     setLoading(true);
     try {
-      // 1. Fetch trending videos (most popular)
       const trendingRes = await fetch(
         `https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&maxResults=10&key=${YOUTUBE_API_KEY}&regionCode=US`
       );
       const trendingData = await trendingRes.json();
       if (!trendingRes.ok) throw new Error(trendingData.error?.message || 'Trending fetch failed');
 
-      // 2. Fetch Shorts (search for #shorts)
       const shortsRes = await fetch(
         `https://www.googleapis.com/youtube/v3/search?part=snippet&q=shorts&maxResults=10&key=${YOUTUBE_API_KEY}&type=video&videoDuration=short`
       );
@@ -70,11 +65,9 @@ export default function Feed() {
       let existingPosts = binData.posts || [];
       let existingShorts = binData.shorts || [];
 
-      // Remove old YouTube posts (clear previous trending and shorts)
       existingPosts = existingPosts.filter((p: any) => p.userId !== 'youtube_bot');
       existingShorts = existingShorts.filter((s: any) => s.userId !== 'youtube_bot');
 
-      // Build new trending posts (mark as type 'post')
       const newTrending = trendingData.items?.map((item: any) => ({
         id: `yt_${item.id}`,
         text: item.snippet.title,
@@ -83,10 +76,9 @@ export default function Feed() {
         likes: 0,
         comments: [],
         timestamp: new Date().toISOString(),
-        type: 'post', // not a short
+        type: 'post',
       })) || [];
 
-      // Build new shorts (type 'short')
       const newShorts = shortsData.items?.map((item: any) => ({
         id: `short_${item.id.videoId}`,
         text: item.snippet.title,
@@ -103,15 +95,14 @@ export default function Feed() {
       const allShorts = [...newShorts, ...existingShorts];
 
       await saveData({ ...binData, posts: allPosts, shorts: allShorts });
-      await loadData(); // reload UI
-      console.log(`✅ Refreshed feed: ${newTrending.length} trending, ${newShorts.length} shorts`);
+      await loadData();
+      console.log(`✅ Refreshed: ${newTrending.length} trending, ${newShorts.length} shorts`);
     } catch (err: any) {
       console.error('Failed to refresh feed:', err.message);
     }
     setLoading(false);
   };
 
-  // Initial load & refresh
   useEffect(() => {
     loadData();
     if (!hasFetched.current) {
@@ -128,7 +119,6 @@ export default function Feed() {
     setRefreshing(false);
   };
 
-  // Like, comment, share, follow functions (unchanged)
   const like = async (postId: string, isShort: boolean = false) => {
     const data = await fetchData();
     const target = isShort ? (data.shorts || []) : (data.posts || []);
@@ -181,7 +171,6 @@ export default function Feed() {
     return user.following?.includes(userId) || false;
   };
 
-  // Search functions
   const searchYouTube = async (query: string) => {
     if (!YOUTUBE_API_KEY) return [];
     try {
@@ -232,7 +221,7 @@ export default function Feed() {
     setSearchActiveTab('users');
   };
 
-  // Render a post card (used for home feed)
+  // ----- Home feed render (unchanged) -----
   const renderPost = (p: any, isShort: boolean = false) => {
     const postUser = getUser(p.userId);
     const isFollowingUser = isFollowing(p.userId);
@@ -241,7 +230,6 @@ export default function Feed() {
 
     return (
       <div key={p.id} className="bg-gray-900 rounded-2xl overflow-hidden mb-4">
-        {/* Header */}
         <div className="flex items-center justify-between p-3">
           <div className="flex items-center gap-3">
             {postUser?.photoURL ? (
@@ -281,7 +269,6 @@ export default function Feed() {
           )}
         </div>
 
-        {/* Media */}
         {p.media && p.media.startsWith('data:image') && (
           <Image src={p.media} alt="Post" width={400} height={400} className="w-full h-auto object-cover" />
         )}
@@ -342,10 +329,115 @@ export default function Feed() {
     );
   };
 
+  // ----- TikTok-style Shorts render -----
+  const renderShort = (s: any) => {
+    const postUser = getUser(s.userId);
+    const isFollowingUser = isFollowing(s.userId);
+
+    return (
+      <div key={s.id} className="relative h-screen w-full bg-black snap-start snap-always">
+        {/* Video/Media fills the whole screen */}
+        <div className="absolute inset-0">
+          {s.media && s.media.startsWith('http') ? (
+            <VideoEmbed url={s.media} />
+          ) : s.media?.startsWith('data:video') ? (
+            <video src={s.media} controls className="w-full h-full object-cover" />
+          ) : s.media?.startsWith('data:image') ? (
+            <Image src={s.media} fill className="object-cover" alt="Short" />
+          ) : (
+            <div className="w-full h-full bg-gray-900 flex items-center justify-center text-gray-500">
+              No media
+            </div>
+          )}
+        </div>
+
+        {/* Overlay gradient (bottom) */}
+        <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+
+        {/* User info & caption at bottom-left */}
+        <div className="absolute bottom-28 left-4 right-20 z-10">
+          <div className="flex items-center gap-2">
+            {postUser?.photoURL ? (
+              <Image src={postUser.photoURL} alt="Avatar" width={32} height={32} className="w-8 h-8 rounded-full object-cover border-2 border-white" />
+            ) : (
+              <FaUserCircle size={32} className="text-white/80" />
+            )}
+            <span className="text-white font-semibold text-sm">
+              {postUser?.displayName || 'Unknown'}
+              {postUser?.isAdmin && <span className="ml-1 text-yellow-400 text-xs">⭐</span>}
+              {postUser?.isVerified && <span className="ml-1 text-blue-400 text-xs">✓</span>}
+            </span>
+            {user && postUser && postUser.id !== user.id && postUser.id !== 'youtube_bot' && (
+              <button
+                onClick={() => followUser(postUser.id)}
+                className={`text-xs px-3 py-1 rounded-full transition ${
+                  isFollowingUser ? 'bg-gray-600/70 text-gray-200' : 'bg-blue-600/80 text-white hover:bg-blue-700'
+                }`}
+              >
+                {isFollowingUser ? 'Following' : 'Follow'}
+              </button>
+            )}
+          </div>
+          {s.text && <p className="text-white text-sm mt-1 line-clamp-2">{s.text}</p>}
+        </div>
+
+        {/* Right-side action buttons */}
+        <div className="absolute bottom-40 right-4 z-10 flex flex-col items-center gap-5">
+          <button onClick={() => like(s.id, true)} className="flex flex-col items-center text-white">
+            <div className="bg-white/20 backdrop-blur-sm p-3 rounded-full hover:bg-white/30 transition">
+              <FaHeart size={24} className="text-red-400" />
+            </div>
+            <span className="text-xs mt-1">{s.likes || 0}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              // Focus comment input – we'll scroll to it or open a modal
+              // For simplicity, we just add a comment using the existing input (we'll handle later)
+              // Here we'll just simulate by focusing a hidden input or we can open a comment modal.
+              // For now, we'll add a comment via prompt (but we'll reuse the global comment system).
+              // To keep it simple, we'll use the existing comment state by setting the commentText for this post.
+              // The user can comment via the comment input at the bottom of the post (we'll add it).
+            }}
+            className="flex flex-col items-center text-white"
+          >
+            <div className="bg-white/20 backdrop-blur-sm p-3 rounded-full hover:bg-white/30 transition">
+              <FaComment size={24} />
+            </div>
+            <span className="text-xs mt-1">{s.comments?.length || 0}</span>
+          </button>
+
+          <button onClick={() => sharePost(s)} className="flex flex-col items-center text-white">
+            <div className="bg-white/20 backdrop-blur-sm p-3 rounded-full hover:bg-white/30 transition">
+              <FaShare size={24} />
+            </div>
+            <span className="text-xs mt-1">Share</span>
+          </button>
+        </div>
+
+        {/* Comment input overlay at bottom */}
+        {user && (
+          <div className="absolute bottom-4 left-4 right-4 z-10 flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-full p-1.5 border border-white/20">
+            <input
+              className="flex-1 bg-transparent text-white placeholder-gray-300 p-2 text-sm focus:outline-none"
+              placeholder="Add a comment..."
+              value={commentText[s.id] || ''}
+              onChange={(e) => setCommentText({ ...commentText, [s.id]: e.target.value })}
+              onKeyDown={(e) => e.key === 'Enter' && addComment(s.id, true)}
+            />
+            <button onClick={() => addComment(s.id, true)} className="text-blue-400 hover:text-blue-300 p-1">
+              <FaPaperPlane size={18} />
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-black pb-24">
-      {/* Header with Toggle */}
-      <div className="flex justify-between items-center p-4 border-b border-gray-800">
+      {/* Header */}
+      <div className="flex justify-between items-center p-4 border-b border-gray-800 bg-black z-10 sticky top-0">
         <h1 className="text-2xl font-bold text-white">Chat Up</h1>
         <div className="flex items-center gap-3">
           <button
@@ -361,14 +453,12 @@ export default function Feed() {
         </div>
       </div>
 
-      {/* Toggle: Home / Shorts */}
-      <div className="flex border-b border-gray-800">
+      {/* Tabs */}
+      <div className="flex border-b border-gray-800 bg-black sticky top-14 z-10">
         <button
           onClick={() => setActiveTab('home')}
           className={`flex-1 py-3 text-sm font-semibold transition ${
-            activeTab === 'home'
-              ? 'text-white border-b-2 border-blue-500'
-              : 'text-gray-400 hover:text-gray-200'
+            activeTab === 'home' ? 'text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-200'
           }`}
         >
           Home
@@ -376,9 +466,7 @@ export default function Feed() {
         <button
           onClick={() => setActiveTab('shorts')}
           className={`flex-1 py-3 text-sm font-semibold transition ${
-            activeTab === 'shorts'
-              ? 'text-white border-b-2 border-purple-500'
-              : 'text-gray-400 hover:text-gray-200'
+            activeTab === 'shorts' ? 'text-white border-b-2 border-purple-500' : 'text-gray-400 hover:text-gray-200'
           }`}
         >
           Shorts
@@ -397,13 +485,11 @@ export default function Feed() {
           )}
         </>
       ) : (
-        <div className="p-2">
+        <div className="h-[calc(100vh-120px)] overflow-y-scroll snap-y snap-mandatory scrollbar-hide">
           {shorts.length === 0 ? (
             <p className="text-gray-400 text-center py-20">No shorts available. Refresh to load.</p>
           ) : (
-            <div className="space-y-4">
-              {shorts.map((s) => renderPost(s, true))}
-            </div>
+            shorts.map((s) => renderShort(s))
           )}
         </div>
       )}
@@ -546,4 +632,4 @@ export default function Feed() {
       )}
     </div>
   );
-    }
+        }
