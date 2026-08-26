@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   FaHeart, FaSearch, FaComment, FaPaperPlane, FaUserPlus, FaUserCheck,
   FaShare, FaVideo, FaTimes, FaYoutube, FaSync, FaFire, FaClock,
-  FaUserCircle
+  FaUserCircle, FaSpinner
 } from 'react-icons/fa';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -28,9 +28,8 @@ export default function Feed() {
   const [searchActiveTab, setSearchActiveTab] = useState<'users' | 'videos'>('users');
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [videoLoading, setVideoLoading] = useState<{ [key: string]: boolean }>({});
   const hasFetched = useRef(false);
-  const lastFetchTime = useRef(0);
-  const visibilityTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // ----- Data functions -----
   const loadData = async () => {
@@ -47,13 +46,7 @@ export default function Feed() {
     setShorts(allShorts);
   };
 
-  const fetchTrendingAndShorts = async (force: boolean = false) => {
-    const now = Date.now();
-    // If not forced and less than 5 minutes since last fetch, skip
-    if (!force && (now - lastFetchTime.current) < 5 * 60 * 1000) {
-      console.log('Skipping fetch, recent enough');
-      return;
-    }
+  const fetchTrendingAndShorts = async (force: boolean = true) => {
     if (!YOUTUBE_API_KEY) {
       console.warn('YouTube API key missing');
       return;
@@ -75,6 +68,7 @@ export default function Feed() {
       let existingPosts = binData.posts || [];
       let existingShorts = binData.shorts || [];
 
+      // Remove all old YouTube content so we get fresh ones
       existingPosts = existingPosts.filter((p: any) => p.userId !== 'youtube_bot');
       existingShorts = existingShorts.filter((s: any) => s.userId !== 'youtube_bot');
 
@@ -106,7 +100,6 @@ export default function Feed() {
 
       await saveData({ ...binData, posts: allPosts, shorts: allShorts });
       await loadData();
-      lastFetchTime.current = Date.now();
       console.log(`✅ Refreshed: ${newTrending.length} trending, ${newShorts.length} shorts`);
     } catch (err: any) {
       console.error('Failed to refresh feed:', err.message);
@@ -114,31 +107,25 @@ export default function Feed() {
     setLoading(false);
   };
 
-  // Initial load and fetch
+  // Initial load – always fetch fresh
   useEffect(() => {
     loadData();
     if (!hasFetched.current) {
       hasFetched.current = true;
       fetchTrendingAndShorts(true);
     }
+    // Refresh every 5 minutes
     const interval = setInterval(() => {
-      // Refresh every 5 minutes if the tab is visible
-      if (!document.hidden) {
-        fetchTrendingAndShorts(false);
-      }
+      fetchTrendingAndShorts(true);
     }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // Refresh when tab becomes visible again
+  // Refresh when tab becomes visible
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        // When user returns, refresh if needed
-        const now = Date.now();
-        if (now - lastFetchTime.current > 5 * 60 * 1000) {
-          fetchTrendingAndShorts(false);
-        }
+        fetchTrendingAndShorts(true);
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -151,7 +138,7 @@ export default function Feed() {
     setRefreshing(false);
   };
 
-  // ----- Core actions (like, comment, share, getUser, isFollowing) -----
+  // ----- Core actions -----
   const like = async (postId: string, isShort: boolean = false) => {
     const data = await fetchData();
     const target = isShort ? (data.shorts || []) : (data.posts || []);
@@ -354,11 +341,11 @@ export default function Feed() {
   const renderShort = (s: any) => {
     const postUser = getUser(s.userId);
     const isFollowingUser = isFollowing(s.userId);
-
     const displayName = s.userId === 'youtube_bot' ? 'Shorts' : (postUser?.displayName || 'Unknown');
 
     return (
       <div key={s.id} className="relative h-screen w-full bg-black snap-start snap-always">
+        {/* Video Container – full screen */}
         <div className="absolute inset-0">
           {s.media && s.media.startsWith('http') ? (
             <VideoEmbed url={s.media} />
@@ -373,8 +360,10 @@ export default function Feed() {
           )}
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+        {/* Gradient overlay at bottom */}
+        <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
 
+        {/* User Info & Caption – bottom left */}
         <div className="absolute bottom-28 left-4 right-20 z-10">
           <Link href={s.userId === 'youtube_bot' ? '#' : `/profile/${s.userId}`} className="flex items-center gap-2">
             {postUser?.photoURL ? (
@@ -398,9 +387,10 @@ export default function Feed() {
               {isFollowingUser ? 'Following' : 'Follow'}
             </button>
           )}
-          {s.text && <p className="text-white text-sm mt-1 line-clamp-2">{s.text}</p>}
+          {s.text && <p className="text-white text-sm mt-1 line-clamp-3">{s.text}</p>}
         </div>
 
+        {/* Action buttons – right side */}
         <div className="absolute bottom-40 right-4 z-10 flex flex-col items-center gap-5">
           <button onClick={() => like(s.id, true)} className="flex flex-col items-center text-white">
             <div className="bg-white/20 backdrop-blur-sm p-3 rounded-full hover:bg-white/30 transition">
@@ -427,6 +417,7 @@ export default function Feed() {
           </button>
         </div>
 
+        {/* Comment input – bottom */}
         {user && (
           <div className="absolute bottom-4 left-4 right-4 z-10 flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-full p-1.5 border border-white/20">
             <input
@@ -508,7 +499,7 @@ export default function Feed() {
 
       <FloatingPlusButton />
 
-      {/* Search Modal (unchanged) */}
+      {/* Search Modal – with suggestions */}
       {showSearch && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -530,6 +521,7 @@ export default function Feed() {
               />
             </div>
 
+            {/* Suggestions (appear as you type) */}
             {searchQuery.trim() && !searching && (
               <div className="mb-4">
                 <div className="text-xs text-gray-400 mb-2">Suggestions</div>
@@ -577,6 +569,7 @@ export default function Feed() {
               </div>
             )}
 
+            {/* Tabs for full results */}
             <div className="flex gap-2 mb-4">
               <button
                 onClick={() => setSearchActiveTab('users')}
@@ -644,4 +637,4 @@ export default function Feed() {
       )}
     </div>
   );
-    }
+                                                 }
