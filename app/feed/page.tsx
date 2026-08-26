@@ -25,38 +25,39 @@ export default function Feed() {
 
   const hasFetched = useRef(false);
 
-  // Load shorts from database (filter out demos)
+  // Load shorts – only keep YouTube-based ones, remove TikTok ones
   const loadShortsFromDB = async () => {
     const data = await fetchData();
     const allShorts = (data.shorts || []).filter((s: any) => {
       const isExpired = new Date(s.expiresAt).getTime() <= new Date().getTime();
-      const isValid = s.id && (s.id.startsWith('yt_') || s.id.startsWith('tt_'));
+      const isValid = s.id && s.id.startsWith('yt_') && s.userId === 'youtube_bot';
       return !isExpired && isValid;
     });
     setShorts(allShorts);
   };
 
-  // Cleanup function: removes any shorts that are not valid
+  // Aggressive cleanup: remove any short that is not from youtube_bot or doesn't start with 'yt_'
   const cleanupDatabase = async () => {
     const data = await fetchData();
     let shorts = data.shorts || [];
     const validShorts = shorts.filter((s: any) => {
-      if (!s.id) return false;
-      return s.id.startsWith('yt_') || s.id.startsWith('tt_');
+      return s.id && s.id.startsWith('yt_') && s.userId === 'youtube_bot';
     });
     if (validShorts.length !== shorts.length) {
       await saveData({ ...data, shorts: validShorts });
-      console.log('🧹 Cleaned up invalid shorts');
+      console.log('🧹 Removed old TikTok/demo shorts from database');
     }
     return validShorts;
   };
 
-  // Fetch videos from our API (which now uses YouTube)
+  // Fetch fresh YouTube shorts (50 at a time)
   const fetchVideos = async () => {
     setLoading(true);
     setError(null);
     try {
+      // First, clean up any old videos
       await cleanupDatabase();
+
       const res = await fetch('/api/tiktok');
       if (!res.ok) {
         const errorData = await res.json();
@@ -77,7 +78,9 @@ export default function Feed() {
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         }));
         setShorts(items);
+        // Replace all existing shorts with these fresh ones (so no old ones remain)
         const binData = await fetchData();
+        // Remove all previous youtube_bot shorts
         let existingShorts = binData.shorts || [];
         existingShorts = existingShorts.filter((s: any) => s.userId !== 'youtube_bot');
         const allShorts = [...items, ...existingShorts];
@@ -92,6 +95,7 @@ export default function Feed() {
     setLoading(false);
   };
 
+  // On mount, clean and fetch
   useEffect(() => {
     const init = async () => {
       await cleanupDatabase();
@@ -104,13 +108,25 @@ export default function Feed() {
     init();
   }, []);
 
+  // Refresh on visibility change (user returns to app)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        // Refresh when user comes back to the tab
+        fetchVideos();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
   const handleRefresh = async () => {
     setRefreshing(true);
     await fetchVideos();
     setRefreshing(false);
   };
 
-  // Like/Unlike toggle
+  // Like/Unlike toggle (unchanged)
   const toggleLike = async (shortId: string) => {
     if (!user) return;
     const data = await fetchData();
@@ -201,7 +217,6 @@ export default function Feed() {
   const renderShort = (s: any) => {
     const postUser = getUser(s.userId);
     const isFollowingUser = isFollowing(s.userId);
-    // 🟢 CHANGED: Display name is now "Chat Up Shorts"
     const displayName = s.userId === 'youtube_bot' ? 'Chat Up Shorts' : (postUser?.displayName || 'Unknown');
     const hasLiked = user && s.likedBy?.includes(user.id);
 
