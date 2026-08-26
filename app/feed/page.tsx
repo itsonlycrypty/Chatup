@@ -47,6 +47,7 @@ export default function Feed() {
           media: item.video || item.play || '',
           userId: 'tiktok_bot',
           likes: 0,
+          likedBy: [], // track who liked
           comments: [],
           timestamp: new Date().toISOString(),
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
@@ -81,15 +82,29 @@ export default function Feed() {
     setRefreshing(false);
   };
 
-  const like = async (shortId: string) => {
+  // Like/Unlike toggle
+  const toggleLike = async (shortId: string) => {
+    if (!user) return;
     const data = await fetchData();
     const shorts = data.shorts || [];
     const idx = shorts.findIndex((s: any) => s.id === shortId);
     if (idx === -1) return;
-    shorts[idx].likes = (shorts[idx].likes || 0) + 1;
+    const short = shorts[idx];
+    if (!short.likedBy) short.likedBy = [];
+    const hasLiked = short.likedBy.includes(user.id);
+    if (hasLiked) {
+      // Unlike
+      short.likedBy = short.likedBy.filter((id: string) => id !== user.id);
+      short.likes = Math.max(0, (short.likes || 0) - 1);
+    } else {
+      // Like
+      short.likedBy.push(user.id);
+      short.likes = (short.likes || 0) + 1;
+    }
     await saveData({ ...data, shorts });
     loadShortsFromDB();
-    setShorts(prev => prev.map(s => s.id === shortId ? { ...s, likes: s.likes + 1 } : s));
+    // Update local state
+    setShorts(prev => prev.map(s => s.id === shortId ? { ...s, likes: short.likes, likedBy: short.likedBy } : s));
   };
 
   const addComment = async (shortId: string) => {
@@ -161,7 +176,9 @@ export default function Feed() {
   const renderShort = (s: any) => {
     const postUser = getUser(s.userId);
     const isFollowingUser = isFollowing(s.userId);
-    const displayName = s.userId === 'tiktok_bot' ? 'TikTok' : (postUser?.displayName || 'Unknown');
+    // Changed from 'TikTok' to 'Chat Up'
+    const displayName = s.userId === 'tiktok_bot' ? 'Chat Up' : (postUser?.displayName || 'Unknown');
+    const hasLiked = user && s.likedBy?.includes(user.id);
 
     return (
       <div key={s.id} className="relative h-screen w-full bg-black snap-start snap-always">
@@ -198,9 +215,12 @@ export default function Feed() {
         </div>
 
         <div className="absolute bottom-40 right-4 z-10 flex flex-col items-center gap-5">
-          <button onClick={() => like(s.id)} className="flex flex-col items-center text-white">
-            <div className="bg-white/20 backdrop-blur-sm p-3 rounded-full hover:bg-white/30 transition">
-              <FaHeart size={24} className="text-red-400" />
+          {/* Like button with toggle */}
+          <button onClick={() => toggleLike(s.id)} className="flex flex-col items-center text-white">
+            <div className={`p-3 rounded-full backdrop-blur-sm transition ${
+              hasLiked ? 'bg-red-600/80' : 'bg-white/20 hover:bg-white/30'
+            }`}>
+              <FaHeart size={24} className={hasLiked ? 'text-white' : 'text-red-400'} />
             </div>
             <span className="text-xs mt-1">{s.likes || 0}</span>
           </button>
@@ -330,4 +350,4 @@ export default function Feed() {
       )}
     </div>
   );
-    }
+}
