@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { FaHeart, FaSearch, FaComment, FaPaperPlane, FaUserPlus, FaUserCheck, FaShare, FaVideo, FaTimes, FaYoutube } from 'react-icons/fa';
 import Image from 'next/image';
 import FloatingPlusButton from '@/components/FloatingPlusButton';
@@ -19,7 +19,8 @@ export default function Feed() {
   const [searchVideos, setSearchVideos] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
   const [activeTab, setActiveTab] = useState<'users' | 'videos'>('users');
-  const [fetchingTrending, setFetchingTrending] = useState(false);
+  const [loadingTrending, setLoadingTrending] = useState(false);
+  const hasFetchedTrending = useRef(false);
 
   const loadPosts = async () => {
     const data = await fetchData();
@@ -29,11 +30,60 @@ export default function Feed() {
     setPosts(sorted);
   };
 
+  // Auto‑fetch trending on first load (only once)
   useEffect(() => {
     loadPosts();
+    if (!hasFetchedTrending.current) {
+      hasFetchedTrending.current = true;
+      fetchTrending();
+    }
     const interval = setInterval(loadPosts, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  const fetchTrending = async () => {
+    if (!YOUTUBE_API_KEY) {
+      console.warn('YouTube API key missing – add NEXT_PUBLIC_YOUTUBE_API_KEY');
+      return;
+    }
+    setLoadingTrending(true);
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&maxResults=10&key=${YOUTUBE_API_KEY}&regionCode=US`
+      );
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error?.message || 'YouTube API error');
+      }
+      const data = await res.json();
+      if (data.items && data.items.length > 0) {
+        const youtubePosts = data.items.map((item: any) => ({
+          id: `yt_${item.id}`,
+          text: item.snippet.title,
+          media: `https://www.youtube.com/watch?v=${item.id}`,
+          userId: 'youtube_bot',
+          likes: 0,
+          comments: [],
+          timestamp: new Date().toISOString(),
+          type: 'post',
+        }));
+
+        const binData = await fetchData();
+        const existingPosts = binData.posts || [];
+        const existingIds = new Set(existingPosts.map((p: any) => p.id));
+        const newPosts = youtubePosts.filter((p: any) => !existingIds.has(p.id));
+        if (newPosts.length > 0) {
+          const allPosts = [...newPosts, ...existingPosts];
+          await saveData({ ...binData, posts: allPosts });
+          console.log(`${newPosts.length} trending videos added to feed`);
+          loadPosts();
+        }
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch trending:', err.message);
+    }
+    setLoadingTrending(false);
+  };
 
   const like = async (postId: string) => {
     const data = await fetchData();
@@ -88,48 +138,6 @@ export default function Feed() {
     return user.following?.includes(userId) || false;
   };
 
-  // 🎥 Fetch trending YouTube videos and add them to the feed
-  const fetchTrending = async () => {
-    if (!YOUTUBE_API_KEY) {
-      alert('YouTube API key missing. Add NEXT_PUBLIC_YOUTUBE_API_KEY to your environment variables.');
-      return;
-    }
-    setFetchingTrending(true);
-    try {
-      const res = await fetch(
-        `https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&maxResults=10&key=${YOUTUBE_API_KEY}&regionCode=US`
-      );
-      const data = await res.json();
-      if (data.items && data.items.length > 0) {
-        const youtubePosts = data.items.map((item: any) => ({
-          id: `yt_${item.id}`,
-          text: item.snippet.title,
-          media: `https://www.youtube.com/watch?v=${item.id}`,
-          userId: 'youtube_bot',
-          likes: 0,
-          comments: [],
-          timestamp: new Date().toISOString(),
-          type: 'post',
-        }));
-
-        const binData = await fetchData();
-        const existingPosts = binData.posts || [];
-        // Combine: new trending videos first, then existing posts (avoid duplicates by video ID)
-        const existingIds = new Set(existingPosts.map((p: any) => p.id));
-        const newPosts = youtubePosts.filter((p: any) => !existingIds.has(p.id));
-        const allPosts = [...newPosts, ...existingPosts];
-        await saveData({ ...binData, posts: allPosts });
-        alert(`${newPosts.length} trending videos added to feed!`);
-        loadPosts();
-      } else {
-        alert('No trending videos found.');
-      }
-    } catch (err: any) {
-      alert('Failed to fetch trending: ' + err.message);
-    }
-    setFetchingTrending(false);
-  };
-
   const searchYouTube = async (query: string) => {
     if (!YOUTUBE_API_KEY) {
       alert('YouTube API key not set.');
@@ -165,7 +173,6 @@ export default function Feed() {
       return;
     }
     setSearching(true);
-    // Search users locally
     const data = await fetchData();
     const users = data.users || [];
     const filteredUsers = users.filter((u: any) =>
@@ -175,7 +182,6 @@ export default function Feed() {
     );
     setSearchResults(filteredUsers);
 
-    // Search YouTube
     const videos = await searchYouTube(query);
     setSearchVideos(videos);
     setSearching(false);
@@ -194,14 +200,9 @@ export default function Feed() {
       <div className="flex justify-between items-center p-4 border-b border-gray-800">
         <h1 className="text-2xl font-bold text-white">Feed</h1>
         <div className="flex items-center gap-2">
-          <button
-            onClick={fetchTrending}
-            disabled={fetchingTrending}
-            className="text-red-500 hover:text-red-400 transition disabled:opacity-50"
-            title="Add trending YouTube videos to feed"
-          >
-            <FaYoutube size={24} />
-          </button>
+          {loadingTrending && (
+            <span className="text-xs text-gray-400 animate-pulse">Loading...</span>
+          )}
           <button onClick={openSearch} className="text-white hover:text-blue-400">
             <FaSearch size={24} />
           </button>
@@ -209,7 +210,7 @@ export default function Feed() {
       </div>
 
       {posts.length === 0 ? (
-        <p className="text-gray-400 text-center py-20">No posts yet. Tap + to upload or fetch trending!</p>
+        <p className="text-gray-400 text-center py-20">No posts yet. Tap + to upload.</p>
       ) : (
         <div className="space-y-6 p-2">
           {posts.map((p) => {
@@ -411,4 +412,4 @@ export default function Feed() {
       )}
     </div>
   );
-      }
+          }
