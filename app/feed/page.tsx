@@ -11,8 +11,6 @@ import { useAuth } from '@/context/AuthContext';
 import { fetchData, saveData } from '@/lib/db';
 import VideoEmbed from '@/components/VideoEmbed';
 
-const TIKTOK_API_KEY = process.env.NEXT_PUBLIC_TIKTOK_API_KEY;
-
 export default function Feed() {
   const { user, allUsers, followUser } = useAuth();
   const [shorts, setShorts] = useState<any[]>([]);
@@ -36,47 +34,35 @@ export default function Feed() {
     setShorts(allShorts);
   };
 
-  // ----- Fetch TikTok videos -----
-  const fetchTikTokVideos = async (query: string = 'trending') => {
-    if (!TIKTOK_API_KEY) {
-      setError('TikTok API key missing. Please add NEXT_PUBLIC_TIKTOK_API_KEY.');
-      setLoading(false);
-      return;
-    }
+  // ----- Fetch TikTok videos from public API -----
+  const fetchTikTokVideos = async () => {
     setLoading(true);
     setError(null);
     try {
-      // Use search endpoint with a popular query to get videos
-      const res = await fetch(
-        `https://api.lamatok.com/v1/search?q=${encodeURIComponent(query)}&count=15`,
-        {
-          headers: { 'Authorization': `Bearer ${TIKTOK_API_KEY}` }
-        }
-      );
-      if (!res.ok) {
-        throw new Error(`API error: ${res.status}`);
-      }
+      // Use TikWM public API – no key required
+      const res = await fetch('https://www.tikwm.com/api/trending');
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
       const data = await res.json();
-      if (data.items && data.items.length > 0) {
-        const newShorts = data.items.map((item: any) => ({
+      if (data.data && data.data.length > 0) {
+        const items = data.data.map((item: any) => ({
           id: `tt_${item.id}`,
-          text: item.title || item.description || '',
-          media: item.video_url || item.url || '',
+          text: item.title || item.desc || '',
+          media: item.video || item.play || '',
           userId: 'tiktok_bot',
           likes: 0,
           comments: [],
           timestamp: new Date().toISOString(),
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         }));
-        setShorts(newShorts);
-        // Save to database (optional)
+        setShorts(items);
+        // Save to database (so it persists)
         const binData = await fetchData();
         let existingShorts = binData.shorts || [];
         existingShorts = existingShorts.filter((s: any) => s.userId !== 'tiktok_bot');
-        const allShorts = [...newShorts, ...existingShorts];
+        const allShorts = [...items, ...existingShorts];
         await saveData({ ...binData, shorts: allShorts });
       } else {
-        setError('No videos found. Try a different search term.');
+        setError('No videos found. Try again later.');
       }
     } catch (err: any) {
       console.error('TikTok fetch error:', err);
@@ -85,22 +71,22 @@ export default function Feed() {
     setLoading(false);
   };
 
-  // Initial load: fetch trending shorts
+  // Initial load
   useEffect(() => {
     loadShortsFromDB();
     if (!hasFetched.current) {
       hasFetched.current = true;
-      fetchTikTokVideos('trending');
+      fetchTikTokVideos();
     }
   }, []);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchTikTokVideos('trending');
+    await fetchTikTokVideos();
     setRefreshing(false);
   };
 
-  // Search function
+  // ----- Search (users) -----
   const performSearch = async (query: string) => {
     setSearchQuery(query);
     if (!query.trim()) {
@@ -108,7 +94,6 @@ export default function Feed() {
       return;
     }
     setSearching(true);
-    // Search users locally
     const data = await fetchData();
     const users = data.users || [];
     const filteredUsers = users.filter((u: any) =>
@@ -117,9 +102,13 @@ export default function Feed() {
       u.email?.toLowerCase().includes(query.toLowerCase())
     );
     setSearchResults(filteredUsers);
-    // Optionally search TikTok videos
-    // For now we just show users.
     setSearching(false);
+  };
+
+  const openSearch = () => {
+    setShowSearch(true);
+    setSearchQuery('');
+    setSearchResults([]);
   };
 
   // ----- Core actions (like, comment, share, follow) -----
@@ -131,7 +120,6 @@ export default function Feed() {
     shorts[idx].likes = (shorts[idx].likes || 0) + 1;
     await saveData({ ...data, shorts });
     loadShortsFromDB();
-    // Also update local state
     setShorts(prev => prev.map(s => s.id === shortId ? { ...s, likes: s.likes + 1 } : s));
   };
 
@@ -177,13 +165,7 @@ export default function Feed() {
     return user.following?.includes(userId) || false;
   };
 
-  const openSearch = () => {
-    setShowSearch(true);
-    setSearchQuery('');
-    setSearchResults([]);
-  };
-
-  // Render a short (TikTok style)
+  // ----- Render a short (TikTok style) -----
   const renderShort = (s: any) => {
     const postUser = getUser(s.userId);
     const isFollowingUser = isFollowing(s.userId);
@@ -275,6 +257,7 @@ export default function Feed() {
     );
   };
 
+  // ----- Main JSX -----
   return (
     <div className="min-h-screen bg-black">
       {/* Header */}
@@ -306,7 +289,7 @@ export default function Feed() {
         <div className="flex items-center justify-center h-[80vh]">
           <div className="text-center">
             <p className="text-red-400 mb-4">{error}</p>
-            <button onClick={() => fetchTikTokVideos('trending')} className="bg-blue-600 px-6 py-2 rounded-full text-white">Retry</button>
+            <button onClick={fetchTikTokVideos} className="bg-blue-600 px-6 py-2 rounded-full text-white">Retry</button>
           </div>
         </div>
       ) : shorts.length === 0 ? (
