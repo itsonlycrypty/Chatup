@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
 
-// Your existing YouTube API key (hardcoded)
 const YOUTUBE_API_KEY = 'AIzaSyCuIFjoCZn9SQApevaGTSi9xujk4WorsUE';
 
 export async function GET() {
   try {
-    // Fetch trending short videos (under 60 seconds)
+    // Fetch 50 trending short videos (max allowed per request)
     const res = await fetch(
-      `https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&maxResults=30&key=${YOUTUBE_API_KEY}&regionCode=US&videoDuration=short`
+      `https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&maxResults=50&key=${YOUTUBE_API_KEY}&regionCode=US&videoDuration=short`
     );
 
     if (!res.ok) {
@@ -22,7 +21,7 @@ export async function GET() {
     const data = await res.json();
 
     if (data.items && data.items.length > 0) {
-      // Shuffle to get random order
+      // Shuffle for random order
       const shuffled = data.items.sort(() => Math.random() - 0.5);
       const items = shuffled.map((item: any) => ({
         id: `yt_${item.id}`,
