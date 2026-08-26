@@ -221,7 +221,7 @@ export default function Feed() {
     setSearchActiveTab('users');
   };
 
-  // ----- Home feed render (unchanged) -----
+  // Home feed render
   const renderPost = (p: any, isShort: boolean = false) => {
     const postUser = getUser(p.userId);
     const isFollowingUser = isFollowing(p.userId);
@@ -245,14 +245,19 @@ export default function Feed() {
             )}
             <div>
               <p className="text-white font-semibold text-sm">
-                {p.userId === 'youtube_bot' ? (isShort ? 'YouTube Shorts' : 'YouTube Trending') : (postUser?.displayName || 'Unknown')}
+                {p.userId === 'youtube_bot'
+                  ? (isShort ? 'Shorts' : 'Trending Videos')  // ← CHANGED HERE
+                  : (postUser?.displayName || 'Unknown')
+                }
                 {postUser?.isAdmin && <span className="ml-1 text-yellow-400 text-xs">⭐</span>}
                 {postUser?.isVerified && <span className="ml-1 text-blue-500 text-xs">✓</span>}
                 {p.userId === 'youtube_bot' && <span className="ml-1 text-red-500 text-xs">🔥</span>}
                 {isShort && <span className="ml-1 text-purple-400 text-xs">#Shorts</span>}
               </p>
               <p className="text-gray-400 text-xs">
-                {p.userId === 'youtube_bot' ? (isShort ? 'Shorts' : 'Trending on YouTube') : `@${postUser?.username || ''}`}
+                {p.userId === 'youtube_bot'
+                  ? (isShort ? 'Shorts' : 'Trending on YouTube')
+                  : `@${postUser?.username || ''}`}
               </p>
             </div>
           </div>
@@ -329,14 +334,13 @@ export default function Feed() {
     );
   };
 
-  // ----- TikTok-style Shorts render -----
+  // TikTok-style Shorts render
   const renderShort = (s: any) => {
     const postUser = getUser(s.userId);
     const isFollowingUser = isFollowing(s.userId);
 
     return (
       <div key={s.id} className="relative h-screen w-full bg-black snap-start snap-always">
-        {/* Video/Media fills the whole screen */}
         <div className="absolute inset-0">
           {s.media && s.media.startsWith('http') ? (
             <VideoEmbed url={s.media} />
@@ -351,10 +355,8 @@ export default function Feed() {
           )}
         </div>
 
-        {/* Overlay gradient (bottom) */}
         <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
-        {/* User info & caption at bottom-left */}
         <div className="absolute bottom-28 left-4 right-20 z-10">
           <div className="flex items-center gap-2">
             {postUser?.photoURL ? (
@@ -381,7 +383,6 @@ export default function Feed() {
           {s.text && <p className="text-white text-sm mt-1 line-clamp-2">{s.text}</p>}
         </div>
 
-        {/* Right-side action buttons */}
         <div className="absolute bottom-40 right-4 z-10 flex flex-col items-center gap-5">
           <button onClick={() => like(s.id, true)} className="flex flex-col items-center text-white">
             <div className="bg-white/20 backdrop-blur-sm p-3 rounded-full hover:bg-white/30 transition">
@@ -392,12 +393,7 @@ export default function Feed() {
 
           <button
             onClick={() => {
-              // Focus comment input – we'll scroll to it or open a modal
-              // For simplicity, we just add a comment using the existing input (we'll handle later)
-              // Here we'll just simulate by focusing a hidden input or we can open a comment modal.
-              // For now, we'll add a comment via prompt (but we'll reuse the global comment system).
-              // To keep it simple, we'll use the existing comment state by setting the commentText for this post.
-              // The user can comment via the comment input at the bottom of the post (we'll add it).
+              // Focus comment input – handled by the input at bottom
             }}
             className="flex flex-col items-center text-white"
           >
@@ -415,7 +411,6 @@ export default function Feed() {
           </button>
         </div>
 
-        {/* Comment input overlay at bottom */}
         {user && (
           <div className="absolute bottom-4 left-4 right-4 z-10 flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-full p-1.5 border border-white/20">
             <input
@@ -436,7 +431,6 @@ export default function Feed() {
 
   return (
     <div className="min-h-screen bg-black pb-24">
-      {/* Header */}
       <div className="flex justify-between items-center p-4 border-b border-gray-800 bg-black z-10 sticky top-0">
         <h1 className="text-2xl font-bold text-white">Chat Up</h1>
         <div className="flex items-center gap-3">
@@ -453,7 +447,6 @@ export default function Feed() {
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex border-b border-gray-800 bg-black sticky top-14 z-10">
         <button
           onClick={() => setActiveTab('home')}
@@ -473,7 +466,6 @@ export default function Feed() {
         </button>
       </div>
 
-      {/* Content */}
       {activeTab === 'home' ? (
         <>
           {posts.length === 0 ? (
@@ -496,7 +488,6 @@ export default function Feed() {
 
       <FloatingPlusButton />
 
-      {/* Search Modal (unchanged) */}
       {showSearch && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -632,4 +623,4 @@ export default function Feed() {
       )}
     </div>
   );
-        }
+}
