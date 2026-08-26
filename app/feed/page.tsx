@@ -29,6 +29,8 @@ export default function Feed() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const hasFetched = useRef(false);
+  const lastFetchTime = useRef(0);
+  const visibilityTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // ----- Data functions -----
   const loadData = async () => {
@@ -45,7 +47,13 @@ export default function Feed() {
     setShorts(allShorts);
   };
 
-  const fetchTrendingAndShorts = async () => {
+  const fetchTrendingAndShorts = async (force: boolean = false) => {
+    const now = Date.now();
+    // If not forced and less than 5 minutes since last fetch, skip
+    if (!force && (now - lastFetchTime.current) < 5 * 60 * 1000) {
+      console.log('Skipping fetch, recent enough');
+      return;
+    }
     if (!YOUTUBE_API_KEY) {
       console.warn('YouTube API key missing');
       return;
@@ -98,6 +106,7 @@ export default function Feed() {
 
       await saveData({ ...binData, posts: allPosts, shorts: allShorts });
       await loadData();
+      lastFetchTime.current = Date.now();
       console.log(`✅ Refreshed: ${newTrending.length} trending, ${newShorts.length} shorts`);
     } catch (err: any) {
       console.error('Failed to refresh feed:', err.message);
@@ -105,23 +114,44 @@ export default function Feed() {
     setLoading(false);
   };
 
+  // Initial load and fetch
   useEffect(() => {
     loadData();
     if (!hasFetched.current) {
       hasFetched.current = true;
-      fetchTrendingAndShorts();
+      fetchTrendingAndShorts(true);
     }
-    const interval = setInterval(loadData, 5000);
+    const interval = setInterval(() => {
+      // Refresh every 5 minutes if the tab is visible
+      if (!document.hidden) {
+        fetchTrendingAndShorts(false);
+      }
+    }, 5 * 60 * 1000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Refresh when tab becomes visible again
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        // When user returns, refresh if needed
+        const now = Date.now();
+        if (now - lastFetchTime.current > 5 * 60 * 1000) {
+          fetchTrendingAndShorts(false);
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchTrendingAndShorts();
+    await fetchTrendingAndShorts(true);
     setRefreshing(false);
   };
 
-  // ----- Core actions -----
+  // ----- Core actions (like, comment, share, getUser, isFollowing) -----
   const like = async (postId: string, isShort: boolean = false) => {
     const data = await fetchData();
     const target = isShort ? (data.shorts || []) : (data.posts || []);
@@ -174,7 +204,7 @@ export default function Feed() {
     return user.following?.includes(userId) || false;
   };
 
-  // ----- Search functions -----
+  // ----- Search -----
   const searchYouTube = async (query: string) => {
     if (!YOUTUBE_API_KEY) return [];
     try {
@@ -225,7 +255,7 @@ export default function Feed() {
     setSearchActiveTab('users');
   };
 
-  // ----- Render functions (INSIDE component to have access to getUser, isFollowing, etc.) -----
+  // ----- Render functions -----
   const renderPost = (p: any, isShort: boolean = false) => {
     const postUser = getUser(p.userId);
     const isFollowingUser = isFollowing(p.userId);
@@ -296,7 +326,7 @@ export default function Feed() {
             <FaHeart className="text-red-400" /> {p.likes || 0}
           </button>
           <button
-            onClick={() => { window.location.href = `/post/${p.id}`; }}
+            onClick={() => window.location.href = `/post/${p.id}`}
             className="flex items-center gap-1 hover:text-blue-400 transition"
           >
             <FaComment /> {(p.comments?.length || 0)}
@@ -380,7 +410,7 @@ export default function Feed() {
           </button>
 
           <button
-            onClick={() => { window.location.href = `/post/${s.id}`; }}
+            onClick={() => window.location.href = `/post/${s.id}`}
             className="flex flex-col items-center text-white"
           >
             <div className="bg-white/20 backdrop-blur-sm p-3 rounded-full hover:bg-white/30 transition">
@@ -418,6 +448,7 @@ export default function Feed() {
   // ----- Main JSX -----
   return (
     <div className="min-h-screen bg-black pb-24">
+      {/* Header */}
       <div className="flex justify-between items-center p-4 border-b border-gray-800 bg-black z-10 sticky top-0">
         <h1 className="text-2xl font-bold text-white">Chat Up</h1>
         <div className="flex items-center gap-3">
@@ -434,6 +465,7 @@ export default function Feed() {
         </div>
       </div>
 
+      {/* Tabs */}
       <div className="flex border-b border-gray-800 bg-black sticky top-14 z-10">
         <button
           onClick={() => setActiveTab('home')}
@@ -453,6 +485,7 @@ export default function Feed() {
         </button>
       </div>
 
+      {/* Content */}
       {activeTab === 'home' ? (
         <>
           {posts.length === 0 ? (
@@ -475,6 +508,7 @@ export default function Feed() {
 
       <FloatingPlusButton />
 
+      {/* Search Modal (unchanged) */}
       {showSearch && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -610,4 +644,4 @@ export default function Feed() {
       )}
     </div>
   );
-  }
+    }
