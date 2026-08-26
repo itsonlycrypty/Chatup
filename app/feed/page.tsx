@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   FaHeart, FaSearch, FaComment, FaPaperPlane, FaUserPlus, FaUserCheck,
-  FaShare, FaTimes, FaSync, FaUserCircle
+  FaShare, FaTimes, FaSync, FaUserCircle, FaTiktok
 } from 'react-icons/fa';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -24,6 +24,7 @@ export default function Feed() {
   const [commentText, setCommentText] = useState<{ [key: string]: string }>({});
 
   const hasFetched = useRef(false);
+  const retryCount = useRef(0);
 
   const loadShortsFromDB = async () => {
     const data = await fetchData();
@@ -40,14 +41,16 @@ export default function Feed() {
       const res = await fetch('/api/tiktok');
       if (!res.ok) throw new Error('API error');
       const data = await res.json();
-      if (data.data && data.data.length > 0) {
+      if (data.error) {
+        setError(data.error);
+        retryCount.current = 0;
+      } else if (data.data && data.data.length > 0) {
         const items = data.data.map((item: any) => ({
           id: `tt_${item.id}`,
           text: item.title || item.desc || '',
           media: item.video || item.play || '',
           userId: 'tiktok_bot',
           likes: 0,
-          likedBy: [], // track who liked
           comments: [],
           timestamp: new Date().toISOString(),
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
@@ -58,12 +61,13 @@ export default function Feed() {
         existingShorts = existingShorts.filter((s: any) => s.userId !== 'tiktok_bot');
         const allShorts = [...items, ...existingShorts];
         await saveData({ ...binData, shorts: allShorts });
+        retryCount.current = 0;
       } else {
-        setError('No videos found.');
+        setError('No videos found. Try again later.');
       }
     } catch (err: any) {
       console.error('TikTok fetch error:', err);
-      setError('Failed to load TikTok videos.');
+      setError('Failed to load videos. Please refresh.');
     }
     setLoading(false);
   };
@@ -82,7 +86,6 @@ export default function Feed() {
     setRefreshing(false);
   };
 
-  // Like/Unlike toggle
   const toggleLike = async (shortId: string) => {
     if (!user) return;
     const data = await fetchData();
@@ -93,17 +96,14 @@ export default function Feed() {
     if (!short.likedBy) short.likedBy = [];
     const hasLiked = short.likedBy.includes(user.id);
     if (hasLiked) {
-      // Unlike
       short.likedBy = short.likedBy.filter((id: string) => id !== user.id);
       short.likes = Math.max(0, (short.likes || 0) - 1);
     } else {
-      // Like
       short.likedBy.push(user.id);
       short.likes = (short.likes || 0) + 1;
     }
     await saveData({ ...data, shorts });
     loadShortsFromDB();
-    // Update local state
     setShorts(prev => prev.map(s => s.id === shortId ? { ...s, likes: short.likes, likedBy: short.likedBy } : s));
   };
 
@@ -176,8 +176,7 @@ export default function Feed() {
   const renderShort = (s: any) => {
     const postUser = getUser(s.userId);
     const isFollowingUser = isFollowing(s.userId);
-    // Changed from 'TikTok' to 'Chat Up'
-    const displayName = s.userId === 'tiktok_bot' ? 'Chat Up' : (postUser?.displayName || 'Unknown');
+    const displayName = s.userId === 'tiktok_bot' ? 'TikTok' : (postUser?.displayName || 'Unknown');
     const hasLiked = user && s.likedBy?.includes(user.id);
 
     return (
@@ -215,7 +214,6 @@ export default function Feed() {
         </div>
 
         <div className="absolute bottom-40 right-4 z-10 flex flex-col items-center gap-5">
-          {/* Like button with toggle */}
           <button onClick={() => toggleLike(s.id)} className="flex flex-col items-center text-white">
             <div className={`p-3 rounded-full backdrop-blur-sm transition ${
               hasLiked ? 'bg-red-600/80' : 'bg-white/20 hover:bg-white/30'
@@ -225,10 +223,7 @@ export default function Feed() {
             <span className="text-xs mt-1">{s.likes || 0}</span>
           </button>
 
-          <button
-            onClick={() => window.location.href = `/post/${s.id}`}
-            className="flex flex-col items-center text-white"
-          >
+          <button onClick={() => window.location.href = `/post/${s.id}`} className="flex flex-col items-center text-white">
             <div className="bg-white/20 backdrop-blur-sm p-3 rounded-full hover:bg-white/30 transition">
               <FaComment size={24} />
             </div>
@@ -289,13 +284,17 @@ export default function Feed() {
       ) : error ? (
         <div className="flex items-center justify-center h-[80vh]">
           <div className="text-center">
-            <p className="text-red-400 mb-4">{error}</p>
+            <div className="text-red-400 text-5xl mb-4">📹</div>
+            <p className="text-gray-400 mb-4">{error}</p>
             <button onClick={fetchTikTokVideos} className="bg-blue-600 px-6 py-2 rounded-full text-white">Retry</button>
           </div>
         </div>
       ) : shorts.length === 0 ? (
         <div className="flex items-center justify-center h-[80vh]">
-          <p className="text-gray-400">No videos available. Pull to refresh.</p>
+          <div className="text-center">
+            <div className="text-gray-400 text-5xl mb-4">🎬</div>
+            <p className="text-gray-400">No videos available. Pull to refresh.</p>
+          </div>
         </div>
       ) : (
         <div className="h-[calc(100vh-65px)] overflow-y-scroll snap-y snap-mandatory scrollbar-hide">
@@ -350,4 +349,4 @@ export default function Feed() {
       )}
     </div>
   );
-}
+    }
