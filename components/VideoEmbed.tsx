@@ -13,7 +13,12 @@ export default function VideoEmbed({ url }: { url: string }) {
     // YouTube
     if (url.includes('youtube.com/watch') || url.includes('youtu.be')) {
       setType('youtube');
-      const videoId = url.includes('v=') ? url.split('v=')[1]?.split('&')[0] : url.split('/').pop();
+      let videoId = '';
+      if (url.includes('v=')) {
+        videoId = url.split('v=')[1]?.split('&')[0] || '';
+      } else {
+        videoId = url.split('/').pop() || '';
+      }
       setEmbedUrl(`https://www.youtube.com/embed/${videoId}`);
       setThumbnail(`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`);
     }
