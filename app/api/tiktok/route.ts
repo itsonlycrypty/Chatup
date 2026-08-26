@@ -1,17 +1,16 @@
 import { NextResponse } from 'next/server';
 
-// Your LamaTok API key
-const LAMATOK_KEY = 'euler_M2M3ZDJmNWU2M2ViYzkwNjQzYmM4OGI5YjhhYWYzYzA5YTAzMGQ2MzdiMDMzMjI0YTNkZTll';
+// Your LamaTok key (exact from screenshot)
+const LAMATOK_KEY = 's700p889eq193fgj63eqa9u1e76bi';
 
 export async function GET() {
   try {
-    // Search for trending videos
     const res = await fetch(
-      `https://api.lamatok.com/v1/search?q=trending&count=20`,
+      'https://api.lamatok.com/v1/search?q=trending&count=20',
       {
         headers: {
-          'Authorization': `Bearer ${LAMATOK_KEY}`,
-          'Content-Type': 'application/json',
+          'x-access-key': LAMATOK_KEY,
+          'accept': 'application/json',
         },
       }
     );
@@ -20,7 +19,7 @@ export async function GET() {
       const errorText = await res.text();
       console.error('LamaTok error:', res.status, errorText);
       return NextResponse.json(
-        { error: `LamaTok API error: ${res.status} - ${errorText}` },
+        { error: `LamaTok error: ${res.status} - ${errorText}` },
         { status: res.status }
       );
     }
@@ -50,4 +49,4 @@ export async function GET() {
       { status: 500 }
     );
   }
-        }
+          }
