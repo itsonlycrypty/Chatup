@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   FaHeart, FaSearch, FaComment, FaPaperPlane, FaUserPlus, FaUserCheck,
-  FaShare, FaTimes, FaSync, FaUserCircle, FaTiktok
+  FaShare, FaTimes, FaSync, FaUserCircle
 } from 'react-icons/fa';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -25,7 +25,6 @@ export default function Feed() {
 
   const hasFetched = useRef(false);
 
-  // ----- Load shorts from database (for user posts) -----
   const loadShortsFromDB = async () => {
     const data = await fetchData();
     const allShorts = (data.shorts || []).filter((s: any) =>
@@ -34,14 +33,12 @@ export default function Feed() {
     setShorts(allShorts);
   };
 
-  // ----- Fetch TikTok videos from public API -----
   const fetchTikTokVideos = async () => {
     setLoading(true);
     setError(null);
     try {
-      // Use TikWM public API – no key required
-      const res = await fetch('https://www.tikwm.com/api/trending');
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const res = await fetch('/api/tiktok');
+      if (!res.ok) throw new Error('API error');
       const data = await res.json();
       if (data.data && data.data.length > 0) {
         const items = data.data.map((item: any) => ({
@@ -55,23 +52,21 @@ export default function Feed() {
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         }));
         setShorts(items);
-        // Save to database (so it persists)
         const binData = await fetchData();
         let existingShorts = binData.shorts || [];
         existingShorts = existingShorts.filter((s: any) => s.userId !== 'tiktok_bot');
         const allShorts = [...items, ...existingShorts];
         await saveData({ ...binData, shorts: allShorts });
       } else {
-        setError('No videos found. Try again later.');
+        setError('No videos found.');
       }
     } catch (err: any) {
       console.error('TikTok fetch error:', err);
-      setError('Failed to load TikTok videos. Please refresh.');
+      setError('Failed to load TikTok videos.');
     }
     setLoading(false);
   };
 
-  // Initial load
   useEffect(() => {
     loadShortsFromDB();
     if (!hasFetched.current) {
@@ -86,32 +81,6 @@ export default function Feed() {
     setRefreshing(false);
   };
 
-  // ----- Search (users) -----
-  const performSearch = async (query: string) => {
-    setSearchQuery(query);
-    if (!query.trim()) {
-      setSearchResults([]);
-      return;
-    }
-    setSearching(true);
-    const data = await fetchData();
-    const users = data.users || [];
-    const filteredUsers = users.filter((u: any) =>
-      u.username?.toLowerCase().includes(query.toLowerCase()) ||
-      u.displayName?.toLowerCase().includes(query.toLowerCase()) ||
-      u.email?.toLowerCase().includes(query.toLowerCase())
-    );
-    setSearchResults(filteredUsers);
-    setSearching(false);
-  };
-
-  const openSearch = () => {
-    setShowSearch(true);
-    setSearchQuery('');
-    setSearchResults([]);
-  };
-
-  // ----- Core actions (like, comment, share, follow) -----
   const like = async (shortId: string) => {
     const data = await fetchData();
     const shorts = data.shorts || [];
@@ -165,7 +134,30 @@ export default function Feed() {
     return user.following?.includes(userId) || false;
   };
 
-  // ----- Render a short (TikTok style) -----
+  const performSearch = async (query: string) => {
+    setSearchQuery(query);
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    const data = await fetchData();
+    const users = data.users || [];
+    const filteredUsers = users.filter((u: any) =>
+      u.username?.toLowerCase().includes(query.toLowerCase()) ||
+      u.displayName?.toLowerCase().includes(query.toLowerCase()) ||
+      u.email?.toLowerCase().includes(query.toLowerCase())
+    );
+    setSearchResults(filteredUsers);
+    setSearching(false);
+  };
+
+  const openSearch = () => {
+    setShowSearch(true);
+    setSearchQuery('');
+    setSearchResults([]);
+  };
+
   const renderShort = (s: any) => {
     const postUser = getUser(s.userId);
     const isFollowingUser = isFollowing(s.userId);
@@ -257,10 +249,8 @@ export default function Feed() {
     );
   };
 
-  // ----- Main JSX -----
   return (
     <div className="min-h-screen bg-black">
-      {/* Header */}
       <div className="flex justify-between items-center p-4 bg-black z-10 sticky top-0">
         <h1 className="text-2xl font-bold text-white">Chat Up</h1>
         <div className="flex items-center gap-3">
@@ -277,7 +267,6 @@ export default function Feed() {
         </div>
       </div>
 
-      {/* Feed content */}
       {loading ? (
         <div className="flex items-center justify-center h-[80vh]">
           <div className="text-center">
@@ -304,7 +293,6 @@ export default function Feed() {
 
       <FloatingPlusButton />
 
-      {/* Search Modal */}
       {showSearch && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -350,4 +338,4 @@ export default function Feed() {
       )}
     </div>
   );
-}
+    }
