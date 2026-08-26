@@ -23,7 +23,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!found) {
       const username = email.split('@')[0];
-      const isAdmin = username === 'Onlycrypty' || username === 'crypty';
+      // ✅ Force admin for "Onlycrypty", "crypty", AND your email
+      const isAdmin = username === 'Onlycrypty' || username === 'crypty' || email === 'wmax8808@gmail.com';
       found = {
         id: Date.now().toString(),
         email,
@@ -41,7 +42,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await saveData({ ...data, users });
     } else {
       const username = found.username || email.split('@')[0];
-      const shouldBeAdmin = username === 'Onlycrypty' || username === 'crypty';
+      // ✅ Also update existing user if they match the admin emails
+      const shouldBeAdmin = username === 'Onlycrypty' || username === 'crypty' || email === 'wmax8808@gmail.com';
       if (shouldBeAdmin) {
         found.isAdmin = true;
         found.isVerified = true;
@@ -80,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const followUser = async (targetUserId: string) => {
     if (!user) return;
-    const users: any[] = await refreshUsers(); // explicitly cast to any[]
+    const users: any[] = await refreshUsers();
     const currentIdx = users.findIndex((u: any) => u.id === user.id);
     const targetIdx = users.findIndex((u: any) => u.id === targetUserId);
     if (currentIdx === -1 || targetIdx === -1) return;
@@ -112,7 +114,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const saved = localStorage.getItem('user');
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (parsed.username === 'Onlycrypty' || parsed.username === 'crypty') {
+      // Also force admin when loading from localStorage
+      if (parsed.username === 'Onlycrypty' || parsed.username === 'crypty' || parsed.email === 'wmax8808@gmail.com') {
         parsed.isAdmin = true;
         parsed.isVerified = true;
         localStorage.setItem('user', JSON.stringify(parsed));
