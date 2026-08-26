@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   FaHeart, FaSearch, FaComment, FaPaperPlane, FaUserPlus, FaUserCheck,
-  FaShare, FaTimes, FaSync, FaUserCircle, FaTiktok
+  FaShare, FaTimes, FaSync, FaUserCircle
 } from 'react-icons/fa';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -24,60 +24,94 @@ export default function Feed() {
   const [commentText, setCommentText] = useState<{ [key: string]: string }>({});
 
   const hasFetched = useRef(false);
-  const retryCount = useRef(0);
 
+  // Load shorts from database (filter out demos)
   const loadShortsFromDB = async () => {
     const data = await fetchData();
-    const allShorts = (data.shorts || []).filter((s: any) =>
-      new Date(s.expiresAt).getTime() > new Date().getTime() && s.userId !== 'youtube_bot'
-    );
+    // Keep only shorts that are from 'tiktok_bot' and have a valid ID starting with 'tt_'
+    const allShorts = (data.shorts || []).filter((s: any) => {
+      const isExpired = new Date(s.expiresAt).getTime() <= new Date().getTime();
+      const isValid = s.id && s.id.startsWith('tt_');
+      return !isExpired && isValid;
+    });
     setShorts(allShorts);
   };
 
+  // Cleanup function: removes any shorts that are not valid TikTok shorts
+  const cleanupDatabase = async () => {
+    const data = await fetchData();
+    let shorts = data.shorts || [];
+    // Remove shorts that don't have a valid TikTok ID or are from youtube_bot
+    const validShorts = shorts.filter((s: any) => {
+      if (s.userId === 'youtube_bot') return false;
+      if (!s.id || !s.id.startsWith('tt_')) return false;
+      return true;
+    });
+    if (validShorts.length !== shorts.length) {
+      await saveData({ ...data, shorts: validShorts });
+      console.log('🧹 Cleaned up invalid shorts from database');
+    }
+    return validShorts;
+  };
+
+  // Fetch real TikTok videos
   const fetchTikTokVideos = async () => {
     setLoading(true);
     setError(null);
     try {
+      // First, clean up any existing invalid shorts
+      await cleanupDatabase();
+
       const res = await fetch('/api/tiktok');
-      if (!res.ok) throw new Error('API error');
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'API error');
+      }
       const data = await res.json();
       if (data.error) {
-        setError(data.error);
-        retryCount.current = 0;
-      } else if (data.data && data.data.length > 0) {
+        throw new Error(data.error);
+      }
+      if (data.data && data.data.length > 0) {
         const items = data.data.map((item: any) => ({
           id: `tt_${item.id}`,
           text: item.title || item.desc || '',
           media: item.video || item.play || '',
           userId: 'tiktok_bot',
           likes: 0,
+          likedBy: [],
           comments: [],
           timestamp: new Date().toISOString(),
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         }));
         setShorts(items);
+        // Save to database
         const binData = await fetchData();
         let existingShorts = binData.shorts || [];
+        // Remove any old tiktok_bot shorts (we'll replace with fresh ones)
         existingShorts = existingShorts.filter((s: any) => s.userId !== 'tiktok_bot');
         const allShorts = [...items, ...existingShorts];
         await saveData({ ...binData, shorts: allShorts });
-        retryCount.current = 0;
       } else {
-        setError('No videos found. Try again later.');
+        setError('No videos found');
       }
     } catch (err: any) {
-      console.error('TikTok fetch error:', err);
-      setError('Failed to load videos. Please refresh.');
+      console.error('Fetch error:', err);
+      setError(err.message || 'Failed to load videos');
     }
     setLoading(false);
   };
 
   useEffect(() => {
-    loadShortsFromDB();
-    if (!hasFetched.current) {
-      hasFetched.current = true;
-      fetchTikTokVideos();
-    }
+    // On mount: load from DB, clean up once, and fetch fresh
+    const init = async () => {
+      await cleanupDatabase();
+      await loadShortsFromDB();
+      if (!hasFetched.current) {
+        hasFetched.current = true;
+        await fetchTikTokVideos();
+      }
+    };
+    init();
   }, []);
 
   const handleRefresh = async () => {
@@ -86,6 +120,7 @@ export default function Feed() {
     setRefreshing(false);
   };
 
+  // Like/Unlike toggle
   const toggleLike = async (shortId: string) => {
     if (!user) return;
     const data = await fetchData();
@@ -349,4 +384,4 @@ export default function Feed() {
       )}
     </div>
   );
-    }
+}
