@@ -15,49 +15,43 @@ const YOUTUBE_API_KEY = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
 export default function Feed() {
   const { user, allUsers, followUser } = useAuth();
   const [posts, setPosts] = useState<any[]>([]);
+  const [shorts, setShorts] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'home' | 'shorts'>('home');
   const [showSearch, setShowSearch] = useState(false);
   const [commentText, setCommentText] = useState<{ [key: string]: string }>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searchVideos, setSearchVideos] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
-  const [activeTab, setActiveTab] = useState<'users' | 'videos'>('users');
-  const [loadingTrending, setLoadingTrending] = useState(false);
+  const [searchActiveTab, setSearchActiveTab] = useState<'users' | 'videos'>('users');
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [shorts, setShorts] = useState<any[]>([]);
-  const hasFetchedTrending = useRef(false);
+  const hasFetched = useRef(false);
 
-  // Load posts and fetch fresh trending/shorts on mount
-  useEffect(() => {
-    loadPosts();
-    // Only fetch once per session, but refresh on every visit via refresh button or on mount
-    if (!hasFetchedTrending.current) {
-      hasFetchedTrending.current = true;
-      fetchTrendingAndShorts();
-    }
-    const interval = setInterval(loadPosts, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadPosts = async () => {
+  // Load posts and shorts
+  const loadData = async () => {
     const data = await fetchData();
-    const sorted = (data.posts || []).sort((a: any, b: any) =>
+    // Home posts: filter out shorts (we store shorts separately)
+    const homePosts = (data.posts || []).filter((p: any) => p.type !== 'short');
+    const sortedHome = homePosts.sort((a: any, b: any) =>
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
-    setPosts(sorted);
-    // Load shorts from data (stored separately or from posts with a "short" flag)
+    setPosts(sortedHome);
+
+    // Shorts: filter valid shorts (not expired)
     const allShorts = (data.shorts || []).filter((s: any) =>
       new Date(s.expiresAt).getTime() > new Date().getTime()
     );
     setShorts(allShorts);
   };
 
+  // Fetch fresh trending and shorts from YouTube
   const fetchTrendingAndShorts = async () => {
     if (!YOUTUBE_API_KEY) {
       console.warn('YouTube API key missing');
       return;
     }
-    setLoadingTrending(true);
+    setLoading(true);
     try {
       // 1. Fetch trending videos (most popular)
       const trendingRes = await fetch(
@@ -80,7 +74,7 @@ export default function Feed() {
       existingPosts = existingPosts.filter((p: any) => p.userId !== 'youtube_bot');
       existingShorts = existingShorts.filter((s: any) => s.userId !== 'youtube_bot');
 
-      // Build new trending posts
+      // Build new trending posts (mark as type 'post')
       const newTrending = trendingData.items?.map((item: any) => ({
         id: `yt_${item.id}`,
         text: item.snippet.title,
@@ -89,10 +83,10 @@ export default function Feed() {
         likes: 0,
         comments: [],
         timestamp: new Date().toISOString(),
-        type: 'post',
+        type: 'post', // not a short
       })) || [];
 
-      // Build new shorts
+      // Build new shorts (type 'short')
       const newShorts = shortsData.items?.map((item: any) => ({
         id: `short_${item.id.videoId}`,
         text: item.snippet.title,
@@ -101,7 +95,7 @@ export default function Feed() {
         likes: 0,
         comments: [],
         timestamp: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24h
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         type: 'short',
       })) || [];
 
@@ -109,41 +103,51 @@ export default function Feed() {
       const allShorts = [...newShorts, ...existingShorts];
 
       await saveData({ ...binData, posts: allPosts, shorts: allShorts });
-      loadPosts();
+      await loadData(); // reload UI
       console.log(`✅ Refreshed feed: ${newTrending.length} trending, ${newShorts.length} shorts`);
     } catch (err: any) {
       console.error('Failed to refresh feed:', err.message);
     }
-    setLoadingTrending(false);
+    setLoading(false);
   };
 
-  // Manual refresh
+  // Initial load & refresh
+  useEffect(() => {
+    loadData();
+    if (!hasFetched.current) {
+      hasFetched.current = true;
+      fetchTrendingAndShorts();
+    }
+    const interval = setInterval(loadData, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   const handleRefresh = async () => {
     setRefreshing(true);
     await fetchTrendingAndShorts();
     setRefreshing(false);
   };
 
-  // Like, comment, share, follow (unchanged from previous)
-  const like = async (postId: string) => {
+  // Like, comment, share, follow functions (unchanged)
+  const like = async (postId: string, isShort: boolean = false) => {
     const data = await fetchData();
-    const posts = data.posts || [];
-    const idx = posts.findIndex((p: any) => p.id === postId);
+    const target = isShort ? (data.shorts || []) : (data.posts || []);
+    const idx = target.findIndex((p: any) => p.id === postId);
     if (idx === -1) return;
-    posts[idx].likes = (posts[idx].likes || 0) + 1;
-    await saveData({ ...data, posts });
-    loadPosts();
+    target[idx].likes = (target[idx].likes || 0) + 1;
+    await saveData({ ...data, posts: data.posts || [], shorts: data.shorts || [] });
+    loadData();
   };
 
-  const addComment = async (postId: string) => {
+  const addComment = async (postId: string, isShort: boolean = false) => {
     const text = commentText[postId]?.trim();
     if (!text || !user) return;
     const data = await fetchData();
-    const posts = data.posts || [];
-    const idx = posts.findIndex((p: any) => p.id === postId);
+    const target = isShort ? (data.shorts || []) : (data.posts || []);
+    const idx = target.findIndex((p: any) => p.id === postId);
     if (idx === -1) return;
-    if (!posts[idx].comments) posts[idx].comments = [];
-    posts[idx].comments.push({
+    if (!target[idx].comments) target[idx].comments = [];
+    target[idx].comments.push({
       id: Date.now().toString(),
       userId: user.id,
       username: user.username,
@@ -151,9 +155,9 @@ export default function Feed() {
       text,
       timestamp: new Date().toISOString(),
     });
-    await saveData({ ...data, posts });
+    await saveData({ ...data, posts: data.posts || [], shorts: data.shorts || [] });
     setCommentText({ ...commentText, [postId]: '' });
-    loadPosts();
+    loadData();
   };
 
   const sharePost = async (post: any) => {
@@ -177,7 +181,7 @@ export default function Feed() {
     return user.following?.includes(userId) || false;
   };
 
-  // Search functions (updated to show suggestions)
+  // Search functions
   const searchYouTube = async (query: string) => {
     if (!YOUTUBE_API_KEY) return [];
     try {
@@ -207,7 +211,6 @@ export default function Feed() {
       return;
     }
     setSearching(true);
-    // Search users locally
     const data = await fetchData();
     const users = data.users || [];
     const filteredUsers = users.filter((u: any) =>
@@ -226,16 +229,15 @@ export default function Feed() {
     setSearchQuery('');
     setSearchResults([]);
     setSearchVideos([]);
-    setActiveTab('users');
+    setSearchActiveTab('users');
   };
 
-  // Render post card
-  const renderPost = (p: any) => {
+  // Render a post card (used for home feed)
+  const renderPost = (p: any, isShort: boolean = false) => {
     const postUser = getUser(p.userId);
     const isFollowingUser = isFollowing(p.userId);
     const isExternal = p.media && p.media.startsWith('http');
     const isYoutube = p.media && p.media.includes('youtube.com');
-    const isShort = p.type === 'short';
 
     return (
       <div key={p.id} className="bg-gray-900 rounded-2xl overflow-hidden mb-4">
@@ -293,7 +295,7 @@ export default function Feed() {
         {p.text && <div className="px-3 py-1"><p className="text-white text-sm">{p.text}</p></div>}
 
         <div className="flex items-center gap-6 px-3 py-2 text-gray-400 text-sm">
-          <button onClick={() => like(p.id)} className="flex items-center gap-1 hover:text-red-400 transition">
+          <button onClick={() => like(p.id, isShort)} className="flex items-center gap-1 hover:text-red-400 transition">
             <FaHeart className="text-red-400" /> {p.likes || 0}
           </button>
           <span className="flex items-center gap-1">
@@ -323,9 +325,9 @@ export default function Feed() {
               placeholder="Add a comment..."
               value={commentText[p.id] || ''}
               onChange={(e) => setCommentText({ ...commentText, [p.id]: e.target.value })}
-              onKeyDown={(e) => e.key === 'Enter' && addComment(p.id)}
+              onKeyDown={(e) => e.key === 'Enter' && addComment(p.id, isShort)}
             />
-            <button onClick={() => addComment(p.id)} className="text-blue-500 hover:text-blue-400">
+            <button onClick={() => addComment(p.id, isShort)} className="text-blue-500 hover:text-blue-400">
               <FaPaperPlane />
             </button>
           </div>
@@ -342,16 +344,16 @@ export default function Feed() {
 
   return (
     <div className="min-h-screen bg-black pb-24">
-      {/* Header */}
+      {/* Header with Toggle */}
       <div className="flex justify-between items-center p-4 border-b border-gray-800">
         <h1 className="text-2xl font-bold text-white">Chat Up</h1>
         <div className="flex items-center gap-3">
           <button
             onClick={handleRefresh}
-            disabled={refreshing || loadingTrending}
+            disabled={refreshing || loading}
             className="text-gray-400 hover:text-white transition disabled:opacity-50"
           >
-            <FaSync className={refreshing || loadingTrending ? 'animate-spin' : ''} size={20} />
+            <FaSync className={refreshing || loading ? 'animate-spin' : ''} size={20} />
           </button>
           <button onClick={openSearch} className="text-white hover:text-blue-400">
             <FaSearch size={22} />
@@ -359,45 +361,56 @@ export default function Feed() {
         </div>
       </div>
 
-      {/* Shorts Row (horizontal scroll) */}
-      {shorts.length > 0 && (
-        <div className="px-4 py-2 border-b border-gray-800">
-          <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
-            <div className="flex-shrink-0 bg-purple-600 rounded-full p-1.5">
-              <FaFire className="text-white" />
-            </div>
-            {shorts.map((short) => (
-              <div key={short.id} className="flex-shrink-0 w-32 h-48 rounded-lg bg-gray-800 overflow-hidden relative">
-                {short.media && short.media.includes('youtube.com') ? (
-                  <div className="w-full h-full">
-                    <VideoEmbed url={short.media} />
-                  </div>
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">
-                    Short
-                  </div>
-                )}
-                <div className="absolute bottom-1 left-1 bg-black/70 text-white text-[10px] px-1 py-0.5 rounded flex items-center gap-1">
-                  <FaClock size={8} /> <span>24h</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Toggle: Home / Shorts */}
+      <div className="flex border-b border-gray-800">
+        <button
+          onClick={() => setActiveTab('home')}
+          className={`flex-1 py-3 text-sm font-semibold transition ${
+            activeTab === 'home'
+              ? 'text-white border-b-2 border-blue-500'
+              : 'text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          Home
+        </button>
+        <button
+          onClick={() => setActiveTab('shorts')}
+          className={`flex-1 py-3 text-sm font-semibold transition ${
+            activeTab === 'shorts'
+              ? 'text-white border-b-2 border-purple-500'
+              : 'text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          Shorts
+        </button>
+      </div>
 
-      {/* Posts Feed */}
-      {posts.length === 0 ? (
-        <p className="text-gray-400 text-center py-20">No posts yet. Tap + to upload or refresh.</p>
+      {/* Content */}
+      {activeTab === 'home' ? (
+        <>
+          {posts.length === 0 ? (
+            <p className="text-gray-400 text-center py-20">No posts yet. Tap + to upload or refresh.</p>
+          ) : (
+            <div className="space-y-4 p-2">
+              {posts.map((p) => renderPost(p, false))}
+            </div>
+          )}
+        </>
       ) : (
-        <div className="space-y-4 p-2">
-          {posts.map(renderPost)}
+        <div className="p-2">
+          {shorts.length === 0 ? (
+            <p className="text-gray-400 text-center py-20">No shorts available. Refresh to load.</p>
+          ) : (
+            <div className="space-y-4">
+              {shorts.map((s) => renderPost(s, true))}
+            </div>
+          )}
         </div>
       )}
 
       <FloatingPlusButton />
 
-      {/* Search Modal - TikTok style with suggestions */}
+      {/* Search Modal (unchanged) */}
       {showSearch && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -419,14 +432,12 @@ export default function Feed() {
               />
             </div>
 
-            {/* Suggestions - show while typing */}
             {searchQuery.trim() && !searching && (
               <div className="mb-4">
                 <div className="text-xs text-gray-400 mb-2">Suggestions</div>
                 {searchResults.length === 0 && searchVideos.length === 0 && (
                   <p className="text-gray-500 text-sm">No results</p>
                 )}
-                {/* User suggestions */}
                 {searchResults.slice(0, 3).map((u) => (
                   <div
                     key={u.id}
@@ -449,7 +460,6 @@ export default function Feed() {
                     </div>
                   </div>
                 ))}
-                {/* Video suggestions */}
                 {searchVideos.slice(0, 3).map((v) => (
                   <div
                     key={v.id}
@@ -469,20 +479,19 @@ export default function Feed() {
               </div>
             )}
 
-            {/* Tabs for full results */}
             <div className="flex gap-2 mb-4">
               <button
-                onClick={() => setActiveTab('users')}
+                onClick={() => setSearchActiveTab('users')}
                 className={`flex-1 py-2 rounded-full text-sm font-semibold transition ${
-                  activeTab === 'users' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'
+                  searchActiveTab === 'users' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'
                 }`}
               >
                 Users
               </button>
               <button
-                onClick={() => setActiveTab('videos')}
+                onClick={() => setSearchActiveTab('videos')}
                 className={`flex-1 py-2 rounded-full text-sm font-semibold transition ${
-                  activeTab === 'videos' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-400'
+                  searchActiveTab === 'videos' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-400'
                 }`}
               >
                 YouTube
@@ -491,7 +500,7 @@ export default function Feed() {
 
             {searching ? (
               <p className="text-gray-400 text-center">Searching...</p>
-            ) : activeTab === 'users' ? (
+            ) : searchActiveTab === 'users' ? (
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {searchResults.length === 0 && searchQuery ? (
                   <p className="text-gray-400 text-center">No users found</p>
@@ -537,4 +546,4 @@ export default function Feed() {
       )}
     </div>
   );
-}
+    }
