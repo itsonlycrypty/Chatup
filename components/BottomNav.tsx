@@ -6,7 +6,7 @@ import { FaHome, FaComments, FaUser } from 'react-icons/fa';
 export default function BottomNav() {
   const path = usePathname();
   const links = [
-    { href: '/feed', icon: FaHome, label: 'Feed' },
+    { href: '/feed', icon: FaHome, label: 'Home' },
     { href: '/chat', icon: FaComments, label: 'Chat' },
     { href: '/profile', icon: FaUser, label: 'Profile' },
   ];
