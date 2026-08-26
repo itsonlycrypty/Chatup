@@ -2,8 +2,8 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   FaHeart, FaSearch, FaComment, FaPaperPlane, FaUserPlus, FaUserCheck,
-  FaShare, FaVideo, FaTimes, FaYoutube, FaSync, FaFire, FaClock,
-  FaUserCircle, FaSpinner
+  FaShare, FaVideo, FaTimes, FaSync, FaFire, FaClock,
+  FaUserCircle, FaTiktok
 } from 'react-icons/fa';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -12,7 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 import { fetchData, saveData } from '@/lib/db';
 import VideoEmbed from '@/components/VideoEmbed';
 
-const YOUTUBE_API_KEY = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
+const TIKTOK_API_KEY = process.env.NEXT_PUBLIC_TIKTOK_API_KEY;
 
 export default function Feed() {
   const { user, allUsers, followUser } = useAuth();
@@ -28,7 +28,6 @@ export default function Feed() {
   const [searchActiveTab, setSearchActiveTab] = useState<'users' | 'videos'>('users');
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [videoLoading, setVideoLoading] = useState<{ [key: string]: boolean }>({});
   const hasFetched = useRef(false);
 
   // ----- Data functions -----
@@ -46,48 +45,56 @@ export default function Feed() {
     setShorts(allShorts);
   };
 
-  const fetchTrendingAndShorts = async (force: boolean = true) => {
-    if (!YOUTUBE_API_KEY) {
-      console.warn('YouTube API key missing');
+  // ----- TikTok API calls -----
+  const fetchTikTokTrending = async () => {
+    if (!TIKTOK_API_KEY) {
+      console.warn('TikTok API key missing');
       return;
     }
     setLoading(true);
     try {
-      const trendingRes = await fetch(
-        `https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&maxResults=10&key=${YOUTUBE_API_KEY}&regionCode=US`
-      );
+      // LamaTok trending endpoint
+      const trendingRes = await fetch('https://api.lamatok.com/v1/trending', {
+        headers: {
+          'Authorization': `Bearer ${TIKTOK_API_KEY}`
+        }
+      });
       const trendingData = await trendingRes.json();
-      if (!trendingRes.ok) throw new Error(trendingData.error?.message || 'Trending fetch failed');
 
-      const shortsRes = await fetch(
-        `https://www.googleapis.com/youtube/v3/search?part=snippet&q=shorts&maxResults=10&key=${YOUTUBE_API_KEY}&type=video&videoDuration=short`
-      );
+      // LamaTok search for shorts (using a generic query to get varied content)
+      const shortsRes = await fetch('https://api.lamatok.com/v1/search?q=shorts&count=10', {
+        headers: {
+          'Authorization': `Bearer ${TIKTOK_API_KEY}`
+        }
+      });
       const shortsData = await shortsRes.json();
 
       const binData = await fetchData();
       let existingPosts = binData.posts || [];
       let existingShorts = binData.shorts || [];
 
-      // Remove all old YouTube content so we get fresh ones
-      existingPosts = existingPosts.filter((p: any) => p.userId !== 'youtube_bot');
-      existingShorts = existingShorts.filter((s: any) => s.userId !== 'youtube_bot');
+      // Remove old TikTok content (userId: 'tiktok_bot')
+      existingPosts = existingPosts.filter((p: any) => p.userId !== 'tiktok_bot');
+      existingShorts = existingShorts.filter((s: any) => s.userId !== 'tiktok_bot');
 
+      // Map trending items to posts (type: 'post')
       const newTrending = trendingData.items?.map((item: any) => ({
-        id: `yt_${item.id}`,
-        text: item.snippet.title,
-        media: `https://www.youtube.com/watch?v=${item.id}`,
-        userId: 'youtube_bot',
+        id: `tt_${item.id}`,
+        text: item.title || item.description || '',
+        media: item.video_url || item.url || '',
+        userId: 'tiktok_bot',
         likes: 0,
         comments: [],
         timestamp: new Date().toISOString(),
         type: 'post',
       })) || [];
 
+      // Map shorts items to shorts (type: 'short')
       const newShorts = shortsData.items?.map((item: any) => ({
-        id: `short_${item.id.videoId}`,
-        text: item.snippet.title,
-        media: `https://www.youtube.com/shorts/${item.id.videoId}`,
-        userId: 'youtube_bot',
+        id: `short_${item.id}`,
+        text: item.title || item.description || '',
+        media: item.video_url || item.url || '',
+        userId: 'tiktok_bot',
         likes: 0,
         comments: [],
         timestamp: new Date().toISOString(),
@@ -100,24 +107,48 @@ export default function Feed() {
 
       await saveData({ ...binData, posts: allPosts, shorts: allShorts });
       await loadData();
-      console.log(`✅ Refreshed: ${newTrending.length} trending, ${newShorts.length} shorts`);
+      console.log(`✅ TikTok refreshed: ${newTrending.length} trending, ${newShorts.length} shorts`);
     } catch (err: any) {
-      console.error('Failed to refresh feed:', err.message);
+      console.error('Failed to fetch TikTok:', err.message);
     }
     setLoading(false);
   };
 
-  // Initial load – always fetch fresh
+  // Search TikTok videos
+  const searchTikTok = async (query: string) => {
+    if (!TIKTOK_API_KEY) return [];
+    try {
+      const res = await fetch(`https://api.lamatok.com/v1/search?q=${encodeURIComponent(query)}&count=10`, {
+        headers: {
+          'Authorization': `Bearer ${TIKTOK_API_KEY}`
+        }
+      });
+      const data = await res.json();
+      if (data.items) {
+        return data.items.map((item: any) => ({
+          id: item.id,
+          title: item.title || item.description || '',
+          thumbnail: item.cover_url || '',
+          url: item.video_url || item.url || '',
+          author: item.author?.name || '',
+        }));
+      }
+      return [];
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
+  };
+
+  // Initial load – fetch from TikTok on first visit
   useEffect(() => {
     loadData();
     if (!hasFetched.current) {
       hasFetched.current = true;
-      fetchTrendingAndShorts(true);
+      fetchTikTokTrending();
     }
     // Refresh every 5 minutes
-    const interval = setInterval(() => {
-      fetchTrendingAndShorts(true);
-    }, 5 * 60 * 1000);
+    const interval = setInterval(fetchTikTokTrending, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -125,7 +156,7 @@ export default function Feed() {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        fetchTrendingAndShorts(true);
+        fetchTikTokTrending();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -134,7 +165,7 @@ export default function Feed() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchTrendingAndShorts(true);
+    await fetchTikTokTrending();
     setRefreshing(false);
   };
 
@@ -192,27 +223,6 @@ export default function Feed() {
   };
 
   // ----- Search -----
-  const searchYouTube = async (query: string) => {
-    if (!YOUTUBE_API_KEY) return [];
-    try {
-      const res = await fetch(
-        `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&key=${YOUTUBE_API_KEY}&maxResults=10&type=video`
-      );
-      const data = await res.json();
-      if (data.items) {
-        return data.items.map((item: any) => ({
-          id: item.id.videoId,
-          title: item.snippet.title,
-          description: item.snippet.description,
-          thumbnail: item.snippet.thumbnails.medium.url,
-          url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
-          channel: item.snippet.channelTitle,
-        }));
-      }
-      return [];
-    } catch (e) { return []; }
-  };
-
   const performSearch = async (query: string) => {
     setSearchQuery(query);
     if (!query.trim()) {
@@ -221,6 +231,7 @@ export default function Feed() {
       return;
     }
     setSearching(true);
+    // Search users locally
     const data = await fetchData();
     const users = data.users || [];
     const filteredUsers = users.filter((u: any) =>
@@ -229,7 +240,9 @@ export default function Feed() {
       u.email?.toLowerCase().includes(query.toLowerCase())
     );
     setSearchResults(filteredUsers);
-    const videos = await searchYouTube(query);
+
+    // Search TikTok
+    const videos = await searchTikTok(query);
     setSearchVideos(videos);
     setSearching(false);
   };
@@ -242,28 +255,28 @@ export default function Feed() {
     setSearchActiveTab('users');
   };
 
-  // ----- Render functions -----
+  // ----- Render functions (same as before, but with TikTok icon) -----
   const renderPost = (p: any, isShort: boolean = false) => {
     const postUser = getUser(p.userId);
     const isFollowingUser = isFollowing(p.userId);
 
-    const displayName = p.userId === 'youtube_bot'
-      ? (isShort ? 'Shorts' : 'Trending Videos')
+    const displayName = p.userId === 'tiktok_bot'
+      ? (isShort ? 'TikTok Shorts' : 'TikTok Trending')
       : (postUser?.displayName || 'Unknown');
 
-    const username = p.userId === 'youtube_bot'
-      ? (isShort ? 'Shorts' : 'Trending')
+    const username = p.userId === 'tiktok_bot'
+      ? (isShort ? 'Shorts' : 'TikTok')
       : (postUser?.username || '');
 
     return (
       <div key={p.id} className="bg-gray-900 rounded-2xl overflow-hidden mb-4">
         <div className="flex items-center justify-between p-3">
-          <Link href={p.userId === 'youtube_bot' ? '#' : `/profile/${p.userId}`} className="flex items-center gap-3 flex-1">
+          <Link href={p.userId === 'tiktok_bot' ? '#' : `/profile/${p.userId}`} className="flex items-center gap-3 flex-1">
             {postUser?.photoURL ? (
               <Image src={postUser.photoURL} alt="Avatar" width={32} height={32} className="w-8 h-8 rounded-full object-cover" />
-            ) : p.userId === 'youtube_bot' ? (
-              <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center text-white text-sm">
-                <FaYoutube />
+            ) : p.userId === 'tiktok_bot' ? (
+              <div className="w-8 h-8 rounded-full bg-black border border-gray-600 flex items-center justify-center text-white text-sm">
+                <FaTiktok />
               </div>
             ) : (
               <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm">
@@ -275,15 +288,15 @@ export default function Feed() {
                 {displayName}
                 {postUser?.isAdmin && <span className="ml-1 text-yellow-400 text-xs">⭐</span>}
                 {postUser?.isVerified && <span className="ml-1 text-blue-500 text-xs">✓</span>}
-                {p.userId === 'youtube_bot' && <span className="ml-1 text-red-500 text-xs">🔥</span>}
+                {p.userId === 'tiktok_bot' && <span className="ml-1 text-red-500 text-xs">🔥</span>}
                 {isShort && <span className="ml-1 text-purple-400 text-xs">#Shorts</span>}
               </p>
               <p className="text-gray-400 text-xs">
-                {p.userId === 'youtube_bot' ? (isShort ? 'Shorts' : 'Trending') : `@${username}`}
+                {p.userId === 'tiktok_bot' ? (isShort ? 'Shorts' : 'Trending') : `@${username}`}
               </p>
             </div>
           </Link>
-          {user && postUser && postUser.id !== user.id && postUser.id !== 'youtube_bot' && (
+          {user && postUser && postUser.id !== user.id && postUser.id !== 'tiktok_bot' && (
             <button
               onClick={() => followUser(postUser.id)}
               className={`text-xs px-3 py-1 rounded-full transition ${
@@ -341,11 +354,10 @@ export default function Feed() {
   const renderShort = (s: any) => {
     const postUser = getUser(s.userId);
     const isFollowingUser = isFollowing(s.userId);
-    const displayName = s.userId === 'youtube_bot' ? 'Shorts' : (postUser?.displayName || 'Unknown');
+    const displayName = s.userId === 'tiktok_bot' ? 'TikTok Shorts' : (postUser?.displayName || 'Unknown');
 
     return (
       <div key={s.id} className="relative h-screen w-full bg-black snap-start snap-always">
-        {/* Video Container – full screen */}
         <div className="absolute inset-0">
           {s.media && s.media.startsWith('http') ? (
             <VideoEmbed url={s.media} />
@@ -360,12 +372,10 @@ export default function Feed() {
           )}
         </div>
 
-        {/* Gradient overlay at bottom */}
         <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
 
-        {/* User Info & Caption – bottom left */}
         <div className="absolute bottom-28 left-4 right-20 z-10">
-          <Link href={s.userId === 'youtube_bot' ? '#' : `/profile/${s.userId}`} className="flex items-center gap-2">
+          <Link href={s.userId === 'tiktok_bot' ? '#' : `/profile/${s.userId}`} className="flex items-center gap-2">
             {postUser?.photoURL ? (
               <Image src={postUser.photoURL} alt="Avatar" width={32} height={32} className="w-8 h-8 rounded-full object-cover border-2 border-white" />
             ) : (
@@ -377,7 +387,7 @@ export default function Feed() {
               {postUser?.isVerified && <span className="ml-1 text-blue-400 text-xs">✓</span>}
             </span>
           </Link>
-          {user && postUser && postUser.id !== user.id && postUser.id !== 'youtube_bot' && (
+          {user && postUser && postUser.id !== user.id && postUser.id !== 'tiktok_bot' && (
             <button
               onClick={() => followUser(postUser.id)}
               className={`text-xs px-3 py-1 rounded-full transition ${
@@ -390,7 +400,6 @@ export default function Feed() {
           {s.text && <p className="text-white text-sm mt-1 line-clamp-3">{s.text}</p>}
         </div>
 
-        {/* Action buttons – right side */}
         <div className="absolute bottom-40 right-4 z-10 flex flex-col items-center gap-5">
           <button onClick={() => like(s.id, true)} className="flex flex-col items-center text-white">
             <div className="bg-white/20 backdrop-blur-sm p-3 rounded-full hover:bg-white/30 transition">
@@ -417,7 +426,6 @@ export default function Feed() {
           </button>
         </div>
 
-        {/* Comment input – bottom */}
         {user && (
           <div className="absolute bottom-4 left-4 right-4 z-10 flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-full p-1.5 border border-white/20">
             <input
@@ -439,7 +447,6 @@ export default function Feed() {
   // ----- Main JSX -----
   return (
     <div className="min-h-screen bg-black pb-24">
-      {/* Header */}
       <div className="flex justify-between items-center p-4 border-b border-gray-800 bg-black z-10 sticky top-0">
         <h1 className="text-2xl font-bold text-white">Chat Up</h1>
         <div className="flex items-center gap-3">
@@ -456,7 +463,6 @@ export default function Feed() {
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex border-b border-gray-800 bg-black sticky top-14 z-10">
         <button
           onClick={() => setActiveTab('home')}
@@ -476,7 +482,6 @@ export default function Feed() {
         </button>
       </div>
 
-      {/* Content */}
       {activeTab === 'home' ? (
         <>
           {posts.length === 0 ? (
@@ -499,7 +504,7 @@ export default function Feed() {
 
       <FloatingPlusButton />
 
-      {/* Search Modal – with suggestions */}
+      {/* Search Modal */}
       {showSearch && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -514,14 +519,13 @@ export default function Feed() {
               <FaSearch className="absolute left-3 top-3 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search users or videos..."
+                placeholder="Search users or TikTok videos..."
                 className="w-full bg-gray-700 text-white p-3 pl-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={searchQuery}
                 onChange={(e) => performSearch(e.target.value)}
               />
             </div>
 
-            {/* Suggestions (appear as you type) */}
             {searchQuery.trim() && !searching && (
               <div className="mb-4">
                 <div className="text-xs text-gray-400 mb-2">Suggestions</div>
@@ -562,14 +566,13 @@ export default function Feed() {
                     <img src={v.thumbnail} alt={v.title} className="w-12 h-8 object-cover rounded" />
                     <div>
                       <p className="text-white text-sm truncate">{v.title}</p>
-                      <p className="text-gray-400 text-xs">{v.channel}</p>
+                      <p className="text-gray-400 text-xs">{v.author}</p>
                     </div>
                   </div>
                 ))}
               </div>
             )}
 
-            {/* Tabs for full results */}
             <div className="flex gap-2 mb-4">
               <button
                 onClick={() => setSearchActiveTab('users')}
@@ -585,7 +588,7 @@ export default function Feed() {
                   searchActiveTab === 'videos' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-400'
                 }`}
               >
-                YouTube
+                TikTok
               </button>
             </div>
 
@@ -614,7 +617,7 @@ export default function Feed() {
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {searchVideos.length === 0 && searchQuery ? (
-                  <p className="text-gray-400 text-center">No YouTube videos found</p>
+                  <p className="text-gray-400 text-center">No TikTok videos found</p>
                 ) : searchVideos.map((v) => (
                   <div
                     key={v.id}
@@ -625,7 +628,7 @@ export default function Feed() {
                       <img src={v.thumbnail} alt={v.title} className="w-20 h-12 object-cover rounded" />
                       <div className="flex-1">
                         <p className="text-white text-sm font-semibold truncate">{v.title}</p>
-                        <p className="text-gray-400 text-xs">{v.channel}</p>
+                        <p className="text-gray-400 text-xs">{v.author}</p>
                       </div>
                     </div>
                   </div>
@@ -637,4 +640,4 @@ export default function Feed() {
       )}
     </div>
   );
-                                                 }
+    }
