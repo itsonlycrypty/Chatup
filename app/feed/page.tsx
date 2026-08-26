@@ -30,14 +30,206 @@ export default function Feed() {
   const [refreshing, setRefreshing] = useState(false);
   const hasFetched = useRef(false);
 
-  // ... (loadData, fetchTrendingAndShorts, useEffect, handleRefresh, like, addComment, sharePost, getUser, isFollowing, searchYouTube, performSearch, openSearch remain the same as before)
+  // ----- Data functions -----
+  const loadData = async () => {
+    const data = await fetchData();
+    const homePosts = (data.posts || []).filter((p: any) => p.type !== 'short');
+    const sortedHome = homePosts.sort((a: any, b: any) =>
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+    setPosts(sortedHome);
 
-  // ----- Render functions -----
+    const allShorts = (data.shorts || []).filter((s: any) =>
+      new Date(s.expiresAt).getTime() > new Date().getTime()
+    );
+    setShorts(allShorts);
+  };
+
+  const fetchTrendingAndShorts = async () => {
+    if (!YOUTUBE_API_KEY) {
+      console.warn('YouTube API key missing');
+      return;
+    }
+    setLoading(true);
+    try {
+      const trendingRes = await fetch(
+        `https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&maxResults=10&key=${YOUTUBE_API_KEY}&regionCode=US`
+      );
+      const trendingData = await trendingRes.json();
+      if (!trendingRes.ok) throw new Error(trendingData.error?.message || 'Trending fetch failed');
+
+      const shortsRes = await fetch(
+        `https://www.googleapis.com/youtube/v3/search?part=snippet&q=shorts&maxResults=10&key=${YOUTUBE_API_KEY}&type=video&videoDuration=short`
+      );
+      const shortsData = await shortsRes.json();
+
+      const binData = await fetchData();
+      let existingPosts = binData.posts || [];
+      let existingShorts = binData.shorts || [];
+
+      existingPosts = existingPosts.filter((p: any) => p.userId !== 'youtube_bot');
+      existingShorts = existingShorts.filter((s: any) => s.userId !== 'youtube_bot');
+
+      const newTrending = trendingData.items?.map((item: any) => ({
+        id: `yt_${item.id}`,
+        text: item.snippet.title,
+        media: `https://www.youtube.com/watch?v=${item.id}`,
+        userId: 'youtube_bot',
+        likes: 0,
+        comments: [],
+        timestamp: new Date().toISOString(),
+        type: 'post',
+      })) || [];
+
+      const newShorts = shortsData.items?.map((item: any) => ({
+        id: `short_${item.id.videoId}`,
+        text: item.snippet.title,
+        media: `https://www.youtube.com/shorts/${item.id.videoId}`,
+        userId: 'youtube_bot',
+        likes: 0,
+        comments: [],
+        timestamp: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        type: 'short',
+      })) || [];
+
+      const allPosts = [...newTrending, ...existingPosts];
+      const allShorts = [...newShorts, ...existingShorts];
+
+      await saveData({ ...binData, posts: allPosts, shorts: allShorts });
+      await loadData();
+      console.log(`✅ Refreshed: ${newTrending.length} trending, ${newShorts.length} shorts`);
+    } catch (err: any) {
+      console.error('Failed to refresh feed:', err.message);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadData();
+    if (!hasFetched.current) {
+      hasFetched.current = true;
+      fetchTrendingAndShorts();
+    }
+    const interval = setInterval(loadData, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchTrendingAndShorts();
+    setRefreshing(false);
+  };
+
+  // ----- Core actions -----
+  const like = async (postId: string, isShort: boolean = false) => {
+    const data = await fetchData();
+    const target = isShort ? (data.shorts || []) : (data.posts || []);
+    const idx = target.findIndex((p: any) => p.id === postId);
+    if (idx === -1) return;
+    target[idx].likes = (target[idx].likes || 0) + 1;
+    await saveData({ ...data, posts: data.posts || [], shorts: data.shorts || [] });
+    loadData();
+  };
+
+  const addComment = async (postId: string, isShort: boolean = false) => {
+    const text = commentText[postId]?.trim();
+    if (!text || !user) return;
+    const data = await fetchData();
+    const target = isShort ? (data.shorts || []) : (data.posts || []);
+    const idx = target.findIndex((p: any) => p.id === postId);
+    if (idx === -1) return;
+    if (!target[idx].comments) target[idx].comments = [];
+    target[idx].comments.push({
+      id: Date.now().toString(),
+      userId: user.id,
+      username: user.username,
+      displayName: user.displayName,
+      text,
+      timestamp: new Date().toISOString(),
+    });
+    await saveData({ ...data, posts: data.posts || [], shorts: data.shorts || [] });
+    setCommentText({ ...commentText, [postId]: '' });
+    loadData();
+  };
+
+  const sharePost = async (post: any) => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: post.text || 'Check out this post on Chat Up',
+          text: post.text || 'Check out this post on Chat Up',
+          url: post.media || window.location.href,
+        });
+      } catch (e) { /* user cancelled */ }
+    } else {
+      await navigator.clipboard?.writeText(`${post.text || 'Check out this post'} - ${post.media || ''}`);
+      alert('Link copied to clipboard!');
+    }
+  };
+
+  const getUser = (userId: string) => allUsers.find((u: any) => u.id === userId);
+  const isFollowing = (userId: string) => {
+    if (!user) return false;
+    return user.following?.includes(userId) || false;
+  };
+
+  // ----- Search functions -----
+  const searchYouTube = async (query: string) => {
+    if (!YOUTUBE_API_KEY) return [];
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&key=${YOUTUBE_API_KEY}&maxResults=10&type=video`
+      );
+      const data = await res.json();
+      if (data.items) {
+        return data.items.map((item: any) => ({
+          id: item.id.videoId,
+          title: item.snippet.title,
+          description: item.snippet.description,
+          thumbnail: item.snippet.thumbnails.medium.url,
+          url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+          channel: item.snippet.channelTitle,
+        }));
+      }
+      return [];
+    } catch (e) { return []; }
+  };
+
+  const performSearch = async (query: string) => {
+    setSearchQuery(query);
+    if (!query.trim()) {
+      setSearchResults([]);
+      setSearchVideos([]);
+      return;
+    }
+    setSearching(true);
+    const data = await fetchData();
+    const users = data.users || [];
+    const filteredUsers = users.filter((u: any) =>
+      u.username?.toLowerCase().includes(query.toLowerCase()) ||
+      u.displayName?.toLowerCase().includes(query.toLowerCase()) ||
+      u.email?.toLowerCase().includes(query.toLowerCase())
+    );
+    setSearchResults(filteredUsers);
+    const videos = await searchYouTube(query);
+    setSearchVideos(videos);
+    setSearching(false);
+  };
+
+  const openSearch = () => {
+    setShowSearch(true);
+    setSearchQuery('');
+    setSearchResults([]);
+    setSearchVideos([]);
+    setSearchActiveTab('users');
+  };
+
+  // ----- Render functions (INSIDE component to have access to getUser, isFollowing, etc.) -----
   const renderPost = (p: any, isShort: boolean = false) => {
     const postUser = getUser(p.userId);
     const isFollowingUser = isFollowing(p.userId);
 
-    // Override display name for youtube_bot
     const displayName = p.userId === 'youtube_bot'
       ? (isShort ? 'Shorts' : 'Trending Videos')
       : (postUser?.displayName || 'Unknown');
@@ -48,7 +240,6 @@ export default function Feed() {
 
     return (
       <div key={p.id} className="bg-gray-900 rounded-2xl overflow-hidden mb-4">
-        {/* User header – wrap in Link to profile */}
         <div className="flex items-center justify-between p-3">
           <Link href={p.userId === 'youtube_bot' ? '#' : `/profile/${p.userId}`} className="flex items-center gap-3 flex-1">
             {postUser?.photoURL ? (
@@ -88,7 +279,6 @@ export default function Feed() {
           )}
         </div>
 
-        {/* Media */}
         {p.media && p.media.startsWith('data:image') && (
           <Image src={p.media} alt="Post" width={400} height={400} className="w-full h-auto object-cover" />
         )}
@@ -106,10 +296,7 @@ export default function Feed() {
             <FaHeart className="text-red-400" /> {p.likes || 0}
           </button>
           <button
-            onClick={() => {
-              // Navigate to post detail
-              window.location.href = `/post/${p.id}`;
-            }}
+            onClick={() => { window.location.href = `/post/${p.id}`; }}
             className="flex items-center gap-1 hover:text-blue-400 transition"
           >
             <FaComment /> {(p.comments?.length || 0)}
@@ -119,7 +306,6 @@ export default function Feed() {
           </button>
         </div>
 
-        {/* Comments preview – now clicking the comment icon takes to detail page */}
         {(p.comments?.length || 0) > 0 && (
           <div className="px-3 pb-2 space-y-1">
             {p.comments.slice(-2).map((c: any) => (
@@ -131,8 +317,6 @@ export default function Feed() {
             {p.comments.length > 2 && <p className="text-gray-500 text-xs">+{p.comments.length - 2} more</p>}
           </div>
         )}
-
-        {/* No YouTube source label – removed */}
       </div>
     );
   };
@@ -141,9 +325,7 @@ export default function Feed() {
     const postUser = getUser(s.userId);
     const isFollowingUser = isFollowing(s.userId);
 
-    // Override display name for youtube_bot shorts
     const displayName = s.userId === 'youtube_bot' ? 'Shorts' : (postUser?.displayName || 'Unknown');
-    const username = s.userId === 'youtube_bot' ? '' : (postUser?.username || '');
 
     return (
       <div key={s.id} className="relative h-screen w-full bg-black snap-start snap-always">
@@ -233,5 +415,199 @@ export default function Feed() {
     );
   };
 
-  // ... (rest of the component: render, return JSX with tabs, search modal)
-}
+  // ----- Main JSX -----
+  return (
+    <div className="min-h-screen bg-black pb-24">
+      <div className="flex justify-between items-center p-4 border-b border-gray-800 bg-black z-10 sticky top-0">
+        <h1 className="text-2xl font-bold text-white">Chat Up</h1>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing || loading}
+            className="text-gray-400 hover:text-white transition disabled:opacity-50"
+          >
+            <FaSync className={refreshing || loading ? 'animate-spin' : ''} size={20} />
+          </button>
+          <button onClick={openSearch} className="text-white hover:text-blue-400">
+            <FaSearch size={22} />
+          </button>
+        </div>
+      </div>
+
+      <div className="flex border-b border-gray-800 bg-black sticky top-14 z-10">
+        <button
+          onClick={() => setActiveTab('home')}
+          className={`flex-1 py-3 text-sm font-semibold transition ${
+            activeTab === 'home' ? 'text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          Home
+        </button>
+        <button
+          onClick={() => setActiveTab('shorts')}
+          className={`flex-1 py-3 text-sm font-semibold transition ${
+            activeTab === 'shorts' ? 'text-white border-b-2 border-purple-500' : 'text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          Shorts
+        </button>
+      </div>
+
+      {activeTab === 'home' ? (
+        <>
+          {posts.length === 0 ? (
+            <p className="text-gray-400 text-center py-20">No posts yet. Tap + to upload or refresh.</p>
+          ) : (
+            <div className="space-y-4 p-2">
+              {posts.map((p) => renderPost(p, false))}
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="h-[calc(100vh-120px)] overflow-y-scroll snap-y snap-mandatory scrollbar-hide">
+          {shorts.length === 0 ? (
+            <p className="text-gray-400 text-center py-20">No shorts available. Refresh to load.</p>
+          ) : (
+            shorts.map((s) => renderShort(s))
+          )}
+        </div>
+      )}
+
+      <FloatingPlusButton />
+
+      {showSearch && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between mb-4">
+              <h2 className="text-white font-bold">Search</h2>
+              <button onClick={() => setShowSearch(false)} className="text-gray-400 hover:text-white">
+                <FaTimes />
+              </button>
+            </div>
+
+            <div className="relative mb-4">
+              <FaSearch className="absolute left-3 top-3 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search users or videos..."
+                className="w-full bg-gray-700 text-white p-3 pl-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={searchQuery}
+                onChange={(e) => performSearch(e.target.value)}
+              />
+            </div>
+
+            {searchQuery.trim() && !searching && (
+              <div className="mb-4">
+                <div className="text-xs text-gray-400 mb-2">Suggestions</div>
+                {searchResults.length === 0 && searchVideos.length === 0 && (
+                  <p className="text-gray-500 text-sm">No results</p>
+                )}
+                {searchResults.slice(0, 3).map((u) => (
+                  <div
+                    key={u.id}
+                    className="flex items-center gap-3 bg-gray-700 p-2 rounded-lg mb-1 hover:bg-gray-600 transition cursor-pointer"
+                    onClick={() => {
+                      setSearchQuery(u.username);
+                      performSearch(u.username);
+                    }}
+                  >
+                    {u.photoURL ? (
+                      <Image src={u.photoURL} alt="Avatar" width={28} height={28} className="w-7 h-7 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs">
+                        {u.displayName?.[0]?.toUpperCase() || 'U'}
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-white text-sm font-semibold">{u.displayName || u.email}</p>
+                      <p className="text-gray-400 text-xs">@{u.username}</p>
+                    </div>
+                  </div>
+                ))}
+                {searchVideos.slice(0, 3).map((v) => (
+                  <div
+                    key={v.id}
+                    className="flex items-center gap-3 bg-gray-700 p-2 rounded-lg mb-1 hover:bg-gray-600 transition cursor-pointer"
+                    onClick={() => {
+                      setSearchQuery(v.title);
+                      performSearch(v.title);
+                    }}
+                  >
+                    <img src={v.thumbnail} alt={v.title} className="w-12 h-8 object-cover rounded" />
+                    <div>
+                      <p className="text-white text-sm truncate">{v.title}</p>
+                      <p className="text-gray-400 text-xs">{v.channel}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => setSearchActiveTab('users')}
+                className={`flex-1 py-2 rounded-full text-sm font-semibold transition ${
+                  searchActiveTab === 'users' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'
+                }`}
+              >
+                Users
+              </button>
+              <button
+                onClick={() => setSearchActiveTab('videos')}
+                className={`flex-1 py-2 rounded-full text-sm font-semibold transition ${
+                  searchActiveTab === 'videos' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-400'
+                }`}
+              >
+                YouTube
+              </button>
+            </div>
+
+            {searching ? (
+              <p className="text-gray-400 text-center">Searching...</p>
+            ) : searchActiveTab === 'users' ? (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {searchResults.length === 0 && searchQuery ? (
+                  <p className="text-gray-400 text-center">No users found</p>
+                ) : searchResults.map((u) => (
+                  <div key={u.id} className="flex items-center gap-3 bg-gray-700 p-3 rounded-xl hover:bg-gray-600 transition">
+                    {u.photoURL ? (
+                      <Image src={u.photoURL} alt="Avatar" width={32} height={32} className="w-8 h-8 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm">
+                        {u.displayName?.[0]?.toUpperCase() || 'U'}
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-white font-semibold">{u.displayName || u.email}</p>
+                      <p className="text-gray-400 text-xs">@{u.username}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {searchVideos.length === 0 && searchQuery ? (
+                  <p className="text-gray-400 text-center">No YouTube videos found</p>
+                ) : searchVideos.map((v) => (
+                  <div
+                    key={v.id}
+                    className="bg-gray-700 p-3 rounded-xl hover:bg-gray-600 transition cursor-pointer"
+                    onClick={() => window.open(v.url, '_blank')}
+                  >
+                    <div className="flex items-center gap-3">
+                      <img src={v.thumbnail} alt={v.title} className="w-20 h-12 object-cover rounded" />
+                      <div className="flex-1">
+                        <p className="text-white text-sm font-semibold truncate">{v.title}</p>
+                        <p className="text-gray-400 text-xs">{v.channel}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+  }
