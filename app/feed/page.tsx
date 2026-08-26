@@ -166,15 +166,7 @@ export default function Feed() {
     return (
       <div key={s.id} className="relative h-screen w-full bg-black snap-start snap-always">
         <div className="absolute inset-0">
-          {s.media && s.media.startsWith('http') ? (
-            <VideoEmbed url={s.media} />
-          ) : s.media?.startsWith('data:video') ? (
-            <video src={s.media} controls className="w-full h-full object-cover" />
-          ) : s.media?.startsWith('data:image') ? (
-            <Image src={s.media} fill className="object-cover" alt="Short" />
-          ) : (
-            <div className="w-full h-full bg-gray-900 flex items-center justify-center text-gray-500">No media</div>
-          )}
+          <VideoEmbed url={s.media} />
         </div>
 
         <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
@@ -286,7 +278,7 @@ export default function Feed() {
           <p className="text-gray-400">No videos available. Pull to refresh.</p>
         </div>
       ) : (
-        <div className="h-[calc(100vh-70px)] overflow-y-scroll snap-y snap-mandatory scrollbar-hide">
+        <div className="h-[calc(100vh-65px)] overflow-y-scroll snap-y snap-mandatory scrollbar-hide">
           {shorts.map((s) => renderShort(s))}
         </div>
       )}
