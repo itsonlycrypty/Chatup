@@ -21,7 +21,7 @@ export async function POST(request: Request) {
         'Authorization': `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'gemma2-9b-it', // ✅ Updated to Google's Gemma 2
+        model: 'llama-3.1-70b-versatile', // ✅ Updated to the latest, supported model
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage },
@@ -53,4 +53,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-      }
+          }
