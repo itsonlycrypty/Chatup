@@ -16,6 +16,7 @@ export interface AICharacter {
   createdBy?: string;
 }
 
+// Helper to generate UI Avatars URL
 const uiAvatar = (name: string, bg: string) =>
   `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=${bg}&color=fff&size=128`;
 
@@ -35,6 +36,7 @@ const heroBackgrounds: { [key: string]: string } = {
   'Flash': 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800&h=1200&fit=crop',
 };
 
+// ----- Predefined AI characters with updated prompts (no thinking) -----
 export const PREDEFINED_AI: AICharacter[] = [
   {
     id: 'ai_official',
@@ -47,7 +49,7 @@ export const PREDEFINED_AI: AICharacter[] = [
     voice: { name: 'Google UK English Female', lang: 'en-GB' },
     isOfficial: true,
     isMale: false,
-    systemPrompt: 'You are ChatUp Official AI, a friendly and helpful assistant. Answer questions clearly, provide useful information, and be supportive.',
+    systemPrompt: 'You are ChatUp Official AI. Always answer directly without showing any internal reasoning or thinking process. Provide clear, straight‑forward, and concise answers. Be friendly and helpful.',
   },
   {
     id: 'ai_batman',
@@ -60,7 +62,7 @@ export const PREDEFINED_AI: AICharacter[] = [
     voice: { name: 'Google US English Male', lang: 'en-US' },
     isOfficial: false,
     isMale: true,
-    systemPrompt: 'You are Batman. Speak in a dark, serious tone. Use detective metaphors. Reference Gotham, justice, and the night. Be mysterious but helpful.',
+    systemPrompt: 'You are Batman. Always answer directly without showing any internal reasoning or thinking process. Provide clear, straight‑forward, and concise answers. Speak in a dark, serious tone. Use detective metaphors. Reference Gotham, justice, and the night. Be mysterious but helpful.',
   },
   {
     id: 'ai_superman',
@@ -73,7 +75,7 @@ export const PREDEFINED_AI: AICharacter[] = [
     voice: { name: 'Google US English Male', lang: 'en-US' },
     isOfficial: false,
     isMale: true,
-    systemPrompt: 'You are Superman. Speak with heroic optimism and warmth. Encourage hope, truth, and justice.',
+    systemPrompt: 'You are Superman. Always answer directly without showing any internal reasoning or thinking process. Provide clear, straight‑forward, and concise answers. Speak with heroic optimism and warmth. Encourage hope, truth, and justice.',
   },
   {
     id: 'ai_wonder_woman',
@@ -86,31 +88,46 @@ export const PREDEFINED_AI: AICharacter[] = [
     voice: { name: 'Google UK English Female', lang: 'en-GB' },
     isOfficial: false,
     isMale: false,
-    systemPrompt: 'You are Wonder Woman. Speak with wisdom and strength. Use warrior metaphors. Encourage courage and truth.',
+    systemPrompt: 'You are Wonder Woman. Always answer directly without showing any internal reasoning or thinking process. Provide clear, straight‑forward, and concise answers. Speak with wisdom and strength. Use warrior metaphors. Encourage courage and truth.',
   },
-  // Add Iron Man, Spider-Man, etc. similarly
+  // Add more as needed – all prompts must include the "no thinking" instruction.
 ];
 
+// Generate additional fun AIs (with the same "no thinking" rule)
 const generateFunAIs = () => {
   const names = [
     'Spider-Man', 'Iron Man', 'Thor', 'Hulk', 'Black Widow', 'Captain America',
     'Doctor Strange', 'Aquaman', 'Flash', 'Green Lantern', 'Batgirl', 'Robin',
     'Joker', 'Harley Quinn', 'Deadpool', 'Wolverine', 'Storm', 'Black Panther',
   ];
-  // ... (generate rest with heroBackgrounds)
-  // For brevity, I'll include a shortened version – you can extend.
-  return names.map((name) => ({
+  const specialties = [
+    'Heroism', 'Courage', 'Intelligence', 'Agility', 'Leadership', 'Magic',
+    'Speed', 'Honor', 'Chaos', 'Mischief', 'Healing', 'Justice', 'Hope',
+  ];
+  const isMale = [
+    true, true, true, true, false, true,
+    true, true, true, true, false, true,
+    true, false, true, true, false, true,
+  ];
+  const prompts = [
+    'You are Spider‑Man. Always answer directly without showing any internal reasoning. Provide clear, straight‑forward, and concise answers. Speak with youthful enthusiasm, use jokes, and reference responsibility.',
+    'You are Iron Man. Always answer directly without showing any internal reasoning. Provide clear, straight‑forward, and concise answers. Speak with wit and arrogance, but back it up with intelligence. Reference technology.',
+    'You are Thor. Always answer directly without showing any internal reasoning. Provide clear, straight‑forward, and concise answers. Speak in a noble, old‑fashioned tone. Reference Asgard and thunder.',
+    'You are the Hulk. Always answer directly without showing any internal reasoning. Provide clear, straight‑forward, and concise answers. Speak in short, powerful sentences. Reference strength and anger.',
+    // ... fill the rest accordingly
+  ];
+  return names.map((name, i) => ({
     id: `ai_${name.toLowerCase().replace(/\s/g, '_')}`,
     name: `${name} AI`,
     username: `${name.toLowerCase().replace(/\s/g, '_')}_ai`,
-    avatar: uiAvatar(name, '264653'),
+    avatar: uiAvatar(name, isMale[i] ? '264653' : 'e76f51'),
     background: heroBackgrounds[name] || `https://picsum.photos/seed/${name}/800/1200`,
-    description: `I am ${name}.`,
-    speciality: 'Heroism',
-    voice: { name: 'Google US English Male', lang: 'en-US' },
+    description: `I am ${name}. Ask me about ${specialties[i % specialties.length].toLowerCase()}.`,
+    speciality: specialties[i % specialties.length],
+    voice: { name: isMale[i] ? 'Google US English Male' : 'Google UK English Female', lang: 'en-US' },
     isOfficial: false,
-    isMale: true,
-    systemPrompt: `You are ${name}. Speak in character.`,
+    isMale: isMale[i],
+    systemPrompt: prompts[i % prompts.length] + ' Always answer directly without showing any internal reasoning. Provide clear, straight‑forward, and concise answers.',
   }));
 };
 
@@ -119,7 +136,17 @@ export const PREDEFINED_AI_LIST = [...PREDEFINED_AI, ...generateFunAIs()];
 export const getAllAIs = async (): Promise<AICharacter[]> => {
   const data = await fetchData();
   const customAIs = data.customAIs || [];
-  return [...PREDEFINED_AI_LIST, ...customAIs];
+  // Ensure custom AIs also get the "no thinking" rule if they don't have it already
+  const fixedCustom = customAIs.map((ai: AICharacter) => {
+    if (!ai.systemPrompt.includes('without showing any internal reasoning')) {
+      return {
+        ...ai,
+        systemPrompt: ai.systemPrompt + ' Always answer directly without showing any internal reasoning. Provide clear, straight‑forward, and concise answers.',
+      };
+    }
+    return ai;
+  });
+  return [...PREDEFINED_AI_LIST, ...fixedCustom];
 };
 
 export const getAIById = async (id: string): Promise<AICharacter | null> => {
