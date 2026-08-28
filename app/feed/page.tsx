@@ -1,8 +1,8 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import {
-  FaHeart, FaSearch, FaComment, FaPaperPlane, FaUserPlus, FaUserCheck,
-  FaShare, FaTimes, FaSync, FaUserCircle
+  FaHeart, FaSearch, FaComment, FaPaperPlane, FaShare,
+  FaTimes, FaSync, FaUserCircle
 } from 'react-icons/fa';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -43,7 +43,6 @@ export default function Feed() {
     });
     if (validShorts.length !== shorts.length) {
       await saveData({ ...data, shorts: validShorts });
-      console.log('🧹 Cleaned up old shorts');
     }
     return validShorts;
   };
@@ -201,6 +200,7 @@ export default function Feed() {
     setSearchResults([]);
   };
 
+  // ---- Full‑screen TikTok-style Shorts render ----
   const renderShort = (s: any) => {
     const postUser = getUser(s.userId);
     const isFollowingUser = isFollowing(s.userId);
@@ -209,10 +209,15 @@ export default function Feed() {
 
     return (
       <div key={s.id} className="relative h-screen w-full bg-black snap-start snap-always">
+        {/* Video fills the whole screen */}
         <div className="absolute inset-0">
           <VideoEmbed url={s.media} />
         </div>
+
+        {/* Gradient overlay at bottom */}
         <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
+
+        {/* User info & caption (bottom left) */}
         <div className="absolute bottom-28 left-4 right-20 z-10">
           <Link href={s.userId === 'youtube_bot' ? '#' : `/profile/${s.userId}`} className="flex items-center gap-2">
             {postUser?.photoURL ? (
@@ -238,6 +243,8 @@ export default function Feed() {
           )}
           {s.text && <p className="text-white text-sm mt-1 line-clamp-3">{s.text}</p>}
         </div>
+
+        {/* Right side action buttons */}
         <div className="absolute bottom-40 right-4 z-10 flex flex-col items-center gap-5">
           <button onClick={() => toggleLike(s.id)} className="flex flex-col items-center text-white">
             <div className={`p-3 rounded-full backdrop-blur-sm transition ${
@@ -247,12 +254,17 @@ export default function Feed() {
             </div>
             <span className="text-xs mt-1">{s.likes || 0}</span>
           </button>
-          <button onClick={() => window.location.href = `/post/${s.id}`} className="flex flex-col items-center text-white">
+
+          <button
+            onClick={() => window.location.href = `/post/${s.id}`}
+            className="flex flex-col items-center text-white"
+          >
             <div className="bg-white/20 backdrop-blur-sm p-3 rounded-full hover:bg-white/30 transition">
               <FaComment size={24} />
             </div>
             <span className="text-xs mt-1">{s.comments?.length || 0}</span>
           </button>
+
           <button onClick={() => sharePost(s)} className="flex flex-col items-center text-white">
             <div className="bg-white/20 backdrop-blur-sm p-3 rounded-full hover:bg-white/30 transition">
               <FaShare size={24} />
@@ -260,6 +272,8 @@ export default function Feed() {
             <span className="text-xs mt-1">Share</span>
           </button>
         </div>
+
+        {/* Comment input at bottom */}
         {user && (
           <div className="absolute bottom-4 left-4 right-4 z-10 flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-full p-1.5 border border-white/20">
             <input
@@ -279,26 +293,36 @@ export default function Feed() {
   };
 
   return (
-    <div className="min-h-screen bg-black">
-      <div className="flex justify-between items-center p-4 bg-black z-10 sticky top-0">
-        <h1 className="text-2xl font-bold text-white">Chat Up</h1>
+    <div className="min-h-screen bg-[var(--bg)]">
+      {/* Header */}
+      <div className="flex justify-between items-center p-4 bg-[var(--bg)] z-10 sticky top-0 border-b border-[var(--border)]">
+        <h1 className="text-2xl font-bold text-[var(--text)]">Chat Up</h1>
         <div className="flex items-center gap-3">
-          <button onClick={handleRefresh} disabled={refreshing || loading} className="text-gray-400 hover:text-white transition disabled:opacity-50"><FaSync className={refreshing || loading ? 'animate-spin' : ''} size={20} /></button>
-          <button onClick={openSearch} className="text-white hover:text-blue-400"><FaSearch size={22} /></button>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing || loading}
+            className="text-[var(--text)] hover:text-blue-400 transition disabled:opacity-50"
+          >
+            <FaSync className={refreshing || loading ? 'animate-spin' : ''} size={20} />
+          </button>
+          <button onClick={openSearch} className="text-[var(--text)] hover:text-blue-400">
+            <FaSearch size={22} />
+          </button>
         </div>
       </div>
+
       {loading ? (
         <div className="flex items-center justify-center h-[80vh]">
           <div className="text-center">
             <div className="animate-spin h-12 w-12 border-t-4 border-b-4 border-blue-500 rounded-full mx-auto mb-4" />
-            <p className="text-gray-400">Loading videos...</p>
+            <p className="text-[var(--text)]">Loading videos...</p>
           </div>
         </div>
       ) : error ? (
         <div className="flex items-center justify-center h-[80vh]">
           <div className="text-center">
             <div className="text-red-400 text-5xl mb-4">📹</div>
-            <p className="text-gray-400 mb-4">{error}</p>
+            <p className="text-[var(--text)] mb-4">{error}</p>
             <button onClick={fetchVideos} className="bg-blue-600 px-6 py-2 rounded-full text-white">Retry</button>
           </div>
         </div>
@@ -306,7 +330,7 @@ export default function Feed() {
         <div className="flex items-center justify-center h-[80vh]">
           <div className="text-center">
             <div className="text-gray-400 text-5xl mb-4">🎬</div>
-            <p className="text-gray-400">No videos available. Pull to refresh.</p>
+            <p className="text-[var(--text)]">No videos available. Pull to refresh.</p>
           </div>
         </div>
       ) : (
@@ -314,7 +338,10 @@ export default function Feed() {
           {shorts.map((s) => renderShort(s))}
         </div>
       )}
+
       <FloatingPlusButton />
+
+      {/* Search Modal */}
       {showSearch && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -360,4 +387,4 @@ export default function Feed() {
       )}
     </div>
   );
-      }
+    }
