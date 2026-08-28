@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    // xAI Grok API endpoint (OpenAI‑compatible)
+    // xAI Grok API endpoint
     const res = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -22,12 +22,12 @@ export async function POST(request: Request) {
         'Authorization': `Bearer ${GROK_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'grok-1', // or 'grok-1-latest' depending on your plan
+        model: 'grok-1-latest', // or 'grok-1' – check your plan
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage },
         ],
-        max_tokens: 200,
+        max_tokens: 250,
         temperature: 0.7,
       }),
     });
@@ -35,8 +35,14 @@ export async function POST(request: Request) {
     if (!res.ok) {
       const errorText = await res.text();
       console.error('Grok API error:', res.status, errorText);
+      // Try to parse error
+      let errorMsg = `Grok API error: ${res.status}`;
+      try {
+        const errJson = JSON.parse(errorText);
+        if (errJson.error) errorMsg = errJson.error.message;
+      } catch (_) {}
       return NextResponse.json(
-        { error: `Grok API error: ${res.status}` },
+        { error: errorMsg },
         { status: res.status }
       );
     }
@@ -52,4 +58,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-         }
+  }
