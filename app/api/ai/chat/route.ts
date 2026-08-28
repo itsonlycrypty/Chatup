@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-// Your new Groq API key
+// Your Groq API key
 const GROQ_API_KEY = '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';
 
 export async function POST(request: Request) {
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
         'Authorization': `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'mixtral-8x7b-32768',
+        model: 'gemma2-9b-it', // ✅ Updated to Google's Gemma 2
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage },
@@ -53,4 +53,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-            }
+      }
