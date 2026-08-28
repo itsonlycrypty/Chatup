@@ -44,13 +44,13 @@ export default function ChatRoom() {
           description: ai.description,
           voice: ai.voice,
           isMale: ai.isMale,
-          systemPrompt: ai.systemPrompt || 'You are a helpful assistant.',
+          systemPrompt: ai.systemPrompt || 'Never output any internal reasoning, thinking process, or <think> tags. Always answer directly, clearly, and concisely.',
           isCustom: ai.isCustom || false,
         });
         setIsAI(true);
         setIsOfficial(ai.isOfficial || false);
         setBackground(ai.background || '');
-        setSystemPrompt(ai.systemPrompt || 'You are a helpful assistant.');
+        setSystemPrompt(ai.systemPrompt || 'Never output any internal reasoning, thinking process, or <think> tags. Always answer directly, clearly, and concisely.');
         return;
       }
       const data = await fetchData();
@@ -86,14 +86,13 @@ export default function ChatRoom() {
     return () => clearInterval(interval);
   }, [id, user]);
 
-  // ----- AI response via Groq (Mixtral) – shows errors if any -----
   const getAIResponse = async (userMessage: string): Promise<string> => {
     try {
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          systemPrompt: systemPrompt,
+          systemPrompt: systemPrompt, // this already contains the no-thinking instruction
           userMessage: userMessage,
         }),
       });
@@ -105,12 +104,10 @@ export default function ChatRoom() {
       return data.reply || 'Sorry, I could not generate a response.';
     } catch (e: any) {
       console.error('AI fetch error:', e);
-      // Show the actual error message to the user (for debugging)
       return `⚠️ Error: ${e.message || 'Could not reach the AI service.'}`;
     }
   };
 
-  // ----- Delete any message -----
   const deleteMessage = async (messageId: string) => {
     if (!user) return;
     const chatId = getChatId(user.id, id as string);
@@ -123,7 +120,6 @@ export default function ChatRoom() {
     loadMessages();
   };
 
-  // ----- Send message -----
   const sendMessage = async () => {
     if (!text.trim() || !user || !recipient) return;
     const chatId = getChatId(user.id, id as string);
@@ -160,7 +156,7 @@ export default function ChatRoom() {
     }
   };
 
-  // ----- Text-to-speech -----
+  // ----- Text‑to‑speech with character‑specific pitch -----
   const speakText = (text: string) => {
     if (!speechSynth.current || !voiceEnabled) return;
     const utterance = new SpeechSynthesisUtterance(text);
@@ -169,7 +165,21 @@ export default function ChatRoom() {
       utterance.lang = recipient.voice.lang || 'en-US';
     }
     utterance.rate = 1;
-    utterance.pitch = recipient?.isMale ? 0.9 : 1.1;
+    // Set pitch based on character
+    const name = recipient?.name || '';
+    if (name.includes('Batman')) {
+      utterance.pitch = 0.7; // deep
+    } else if (name.includes('Superman') || name.includes('Spider-Man')) {
+      utterance.pitch = 0.9;
+    } else if (name.includes('Wonder Woman') || name.includes('Black Widow')) {
+      utterance.pitch = 1.2; // higher female
+    } else if (name.includes('Thor')) {
+      utterance.pitch = 0.8;
+    } else if (name.includes('Hulk')) {
+      utterance.pitch = 0.6;
+    } else {
+      utterance.pitch = recipient?.isMale ? 0.9 : 1.1;
+    }
     speechSynth.current.speak(utterance);
   };
 
@@ -191,7 +201,6 @@ export default function ChatRoom() {
     >
       <div className={`absolute inset-0 ${background ? 'bg-black/60' : 'bg-black'}`} />
       <div className="relative z-10 flex flex-col h-full">
-        {/* Header */}
         <div className="flex items-center gap-3 p-3 bg-black/50 backdrop-blur-sm">
           <button onClick={() => window.history.back()} className="text-white hover:text-gray-300">
             <FaArrowLeft size={20} />
@@ -214,7 +223,6 @@ export default function ChatRoom() {
           )}
         </div>
 
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.map((m) => (
             <div
@@ -249,7 +257,6 @@ export default function ChatRoom() {
           <div ref={bottomRef} />
         </div>
 
-        {/* Input */}
         <div className="p-3 bg-black/50 backdrop-blur-sm flex gap-2">
           <input
             className="flex-1 bg-gray-800/80 text-white p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
