@@ -86,73 +86,43 @@ export default function ChatRoom() {
     return () => clearInterval(interval);
   }, [id, user]);
 
-  // ----- Smarter AI response using system prompt -----
-  const getAIResponse = (userMessage: string): string => {
-    const lower = userMessage.toLowerCase().trim();
-    // Use system prompt to set the tone (but we keep rule-based for simplicity)
-    // We'll prepend the system prompt to give context, but the actual response is rule-based.
-    // For a real AI, we would call an API, but here we simulate.
-    // However, we can make the responses vary based on the system prompt.
-    const prompt = systemPrompt.toLowerCase();
-    let style = '';
-    if (prompt.includes('witty') || prompt.includes('funny')) {
-      style = 'witty';
-    } else if (prompt.includes('dark') || prompt.includes('batman')) {
-      style = 'dark';
-    } else if (prompt.includes('hero') || prompt.includes('superman')) {
-      style = 'heroic';
-    } else if (prompt.includes('romantic') || prompt.includes('love')) {
-      style = 'romantic';
-    } else {
-      style = 'neutral';
-    }
-
-    // Expanded keyword-response mapping
-    const responses: { [key: string]: string | string[] } = {
-      'hello|hi|hey|howdy': [
-        'Hello! How can I assist you today?',
-        'Hi there! What brings you here?',
-        'Hey! Nice to meet you!',
-      ],
-      'how are you|how\'s it going|how are things': [
-        'I\'m an AI, but I\'m functioning optimally! How about you?',
-        'All systems operational! What can I help you with?',
-        'I\'m great, thanks for asking!',
-      ],
-      'who are you|what are you|tell me about yourself': [
-        `I'm ${recipient?.displayName}, an AI assistant ${recipient?.speciality ? `specializing in ${recipient.speciality}` : 'here to help'}.`,
-        `I'm ${recipient?.displayName}. My purpose is to assist you with anything you need.`,
-      ],
-      'what can you do|help|capabilities': [
-        `I can help with ${recipient?.speciality || 'a wide range of topics'}. Just ask me anything!`,
-        'I can answer questions, provide information, chat about various topics, and more.',
-      ],
-      'bye|goodbye|see you': [
-        'Goodbye! It was a pleasure chatting with you.',
-        'See you later! Take care.',
-        'Bye! Feel free to come back anytime.',
-      ],
-      // ... (other categories as before) ...
-    };
-
-    // Check for keyword matches
-    for (const [pattern, reply] of Object.entries(responses)) {
-      const keywords = pattern.split('|');
-      if (keywords.some(k => lower.includes(k))) {
-        const replies = Array.isArray(reply) ? reply : [reply];
-        let selected = replies[Math.floor(Math.random() * replies.length)];
-        // Adjust tone based on style
-        if (style === 'witty') selected += ' 😄';
-        else if (style === 'dark') selected += ' (in a dark voice)';
-        else if (style === 'heroic') selected += ' 💪';
-        return selected;
+  // ----- AI response via our API route (which uses Grok) -----
+  const getAIResponse = async (userMessage: string): Promise<string> => {
+    try {
+      const res = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemPrompt: systemPrompt,
+          userMessage: userMessage,
+        }),
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'API error');
       }
+      const data = await res.json();
+      return data.reply || 'Sorry, I could not generate a response.';
+    } catch (e) {
+      console.error('AI fetch error:', e);
+      // Fallback to rule‑based
+      return getFallbackResponse(userMessage);
     }
-    // Fallback
-    return `That's interesting. Could you tell me more? (I'm ${recipient?.displayName})`;
   };
 
-  // ----- Delete any message (user or AI) -----
+  // Fallback rule‑based response (in case the API fails)
+  const getFallbackResponse = (userMessage: string): string => {
+    const lower = userMessage.toLowerCase().trim();
+    const name = recipient?.displayName || 'AI';
+    if (lower.includes('hello') || lower.includes('hi')) return `Hello! I'm ${name}. How can I help?`;
+    if (lower.includes('how are you')) return `I'm an AI, but I'm functioning perfectly!`;
+    if (lower.includes('who are you')) return `I'm ${name}, an AI assistant.`;
+    if (lower.includes('help')) return `Sure! I'm here to help.`;
+    if (lower.includes('bye')) return 'Goodbye! Take care.';
+    return `That's interesting. Could you tell me more? (I'm ${name})`;
+  };
+
+  // ----- Delete any message -----
   const deleteMessage = async (messageId: string) => {
     if (!user) return;
     const chatId = getChatId(user.id, id as string);
@@ -185,7 +155,7 @@ export default function ChatRoom() {
 
     if (isAI) {
       setTimeout(async () => {
-        const aiReply = getAIResponse(text.trim());
+        const aiReply = await getAIResponse(text.trim());
         const aiMsg = {
           id: Date.now().toString(),
           senderId: recipient.id,
@@ -233,7 +203,6 @@ export default function ChatRoom() {
     >
       <div className={`absolute inset-0 ${background ? 'bg-black/60' : 'bg-black'}`} />
       <div className="relative z-10 flex flex-col h-full">
-        {/* Header */}
         <div className="flex items-center gap-3 p-3 bg-black/50 backdrop-blur-sm">
           <button onClick={() => window.history.back()} className="text-white hover:text-gray-300">
             <FaArrowLeft size={20} />
@@ -256,7 +225,6 @@ export default function ChatRoom() {
           )}
         </div>
 
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.map((m) => (
             <div
@@ -265,7 +233,6 @@ export default function ChatRoom() {
                 m.senderId === user?.id ? 'justify-end' : 'justify-start'
               }`}
             >
-              {/* Avatar for AI messages */}
               {m.senderId !== user?.id && recipient.photoURL && (
                 <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
                   <Image src={recipient.photoURL} alt="Avatar" width={32} height={32} className="w-full h-full object-cover" />
@@ -280,7 +247,6 @@ export default function ChatRoom() {
               >
                 {m.text}
               </div>
-              {/* Delete button for all messages */}
               <button
                 onClick={() => deleteMessage(m.id)}
                 className="text-gray-400 hover:text-red-400 text-xs self-center"
@@ -293,7 +259,6 @@ export default function ChatRoom() {
           <div ref={bottomRef} />
         </div>
 
-        {/* Input */}
         <div className="p-3 bg-black/50 backdrop-blur-sm flex gap-2">
           <input
             className="flex-1 bg-gray-800/80 text-white p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -309,4 +274,4 @@ export default function ChatRoom() {
       </div>
     </div>
   );
-      }
+    }
