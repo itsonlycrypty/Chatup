@@ -20,9 +20,9 @@ export default function VideoEmbed({ url }: { url: string }) {
       } else {
         videoId = url.split('/').pop() || '';
       }
-      setEmbedUrl(`https://www.youtube.com/embed/${videoId}`);
+      setEmbedUrl(`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`);
     }
-    // Direct video (mp4, webm, etc.) – handles the demo videos
+    // Direct video (mp4, webm, etc.)
     else if (url.match(/\.(mp4|webm|mov|avi)$/i) || url.includes('mov_bbb.mp4')) {
       setType('direct');
       setEmbedUrl(url);
@@ -81,4 +81,4 @@ export default function VideoEmbed({ url }: { url: string }) {
       </a>
     </div>
   );
-    }
+             }
