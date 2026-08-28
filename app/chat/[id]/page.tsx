@@ -86,7 +86,7 @@ export default function ChatRoom() {
     return () => clearInterval(interval);
   }, [id, user]);
 
-  // ----- AI response using Grok (no fallback) -----
+  // ----- AI response via Groq (Mixtral) – shows errors if any -----
   const getAIResponse = async (userMessage: string): Promise<string> => {
     try {
       const res = await fetch('/api/ai/chat', {
@@ -98,15 +98,15 @@ export default function ChatRoom() {
         }),
       });
       if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || 'API error');
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'API error');
       }
       const data = await res.json();
       return data.reply || 'Sorry, I could not generate a response.';
-    } catch (e) {
+    } catch (e: any) {
       console.error('AI fetch error:', e);
-      // No fallback – return a friendly error message
-      return "I'm sorry, I'm having trouble connecting to my brain right now. Please try again later.";
+      // Show the actual error message to the user (for debugging)
+      return `⚠️ Error: ${e.message || 'Could not reach the AI service.'}`;
     }
   };
 
@@ -191,6 +191,7 @@ export default function ChatRoom() {
     >
       <div className={`absolute inset-0 ${background ? 'bg-black/60' : 'bg-black'}`} />
       <div className="relative z-10 flex flex-col h-full">
+        {/* Header */}
         <div className="flex items-center gap-3 p-3 bg-black/50 backdrop-blur-sm">
           <button onClick={() => window.history.back()} className="text-white hover:text-gray-300">
             <FaArrowLeft size={20} />
@@ -213,6 +214,7 @@ export default function ChatRoom() {
           )}
         </div>
 
+        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.map((m) => (
             <div
@@ -247,6 +249,7 @@ export default function ChatRoom() {
           <div ref={bottomRef} />
         </div>
 
+        {/* Input */}
         <div className="p-3 bg-black/50 backdrop-blur-sm flex gap-2">
           <input
             className="flex-1 bg-gray-800/80 text-white p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -262,4 +265,4 @@ export default function ChatRoom() {
       </div>
     </div>
   );
-                                               }
+}
