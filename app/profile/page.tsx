@@ -85,7 +85,7 @@ export default function Profile() {
 
   // Settings state
   const [settings, setSettings] = useState<SettingsType>({
-    darkMode: true,
+    darkMode: false, // will be updated from localStorage
     language: 'English',
     notificationSounds: true,
     aiVoice: true,
@@ -112,17 +112,34 @@ export default function Profile() {
     groupNotification: 'All Messages',
   });
 
+  // Load dark mode from localStorage on mount
+  useEffect(() => {
+    const dark = localStorage.getItem('darkMode') === 'true';
+    setSettings(prev => ({ ...prev, darkMode: dark }));
+  }, []);
+
   const toggleSetting = (key: SettingsKeys) => {
     setSettings((prev) => {
       const value = prev[key];
       if (typeof value === 'boolean') {
+        // Special handling for darkMode
+        if (key === 'darkMode') {
+          const newMode = !value;
+          // Update localStorage and HTML class
+          localStorage.setItem('darkMode', String(newMode));
+          if (newMode) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+          return { ...prev, [key]: newMode };
+        }
         return { ...prev, [key]: !value };
       }
       return prev;
     });
   };
 
-  // Load user data from JSONBin
   const loadUserData = async () => {
     if (!user) return;
     setDisplayName(user.displayName || user.email);
@@ -155,7 +172,6 @@ export default function Profile() {
     if (user) loadUserData();
   }, [user]);
 
-  // Handle profile picture upload (base64)
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -179,28 +195,27 @@ export default function Profile() {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-black">
+      <div className="h-screen flex items-center justify-center bg-[var(--bg)]">
         <div className="animate-spin h-12 w-12 border-t-2 border-b-2 border-blue-500 rounded-full" />
       </div>
     );
   }
 
-  // Login / Signup screen
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-black p-6">
-        <div className="w-full max-w-sm bg-gray-800/50 backdrop-blur-md rounded-3xl p-8 border border-gray-700">
-          <h1 className="text-4xl font-bold text-center text-white mb-8">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg)] p-6">
+        <div className="w-full max-w-sm bg-[var(--card-bg)] rounded-3xl p-8 border border-[var(--border)]">
+          <h1 className="text-4xl font-bold text-center text-[var(--text)] mb-8">
             Chat Up
           </h1>
           <input
-            className="w-full bg-gray-700/50 text-white p-3 rounded-xl mb-4"
+            className="w-full bg-gray-700/50 text-[var(--text)] p-3 rounded-xl mb-4"
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
           <input
-            className="w-full bg-gray-700/50 text-white p-3 rounded-xl mb-4"
+            className="w-full bg-gray-700/50 text-[var(--text)] p-3 rounded-xl mb-4"
             placeholder={isLogin ? '4-digit PIN' : 'Create 4-digit PIN'}
             type={showPin ? 'text' : 'password'}
             maxLength={4}
@@ -212,7 +227,7 @@ export default function Profile() {
           />
           <button
             onClick={() => setShowPin(!showPin)}
-            className="text-gray-400 text-sm"
+            className="text-[var(--text)] text-sm"
           >
             {showPin ? 'Hide PIN' : 'Show PIN'}
           </button>
@@ -230,7 +245,7 @@ export default function Profile() {
             {isLogin ? 'Log In' : 'Sign Up'}
           </button>
           <p
-            className="text-center text-gray-400 cursor-pointer mt-4"
+            className="text-center text-[var(--text)] cursor-pointer mt-4"
             onClick={() => {
               setIsLogin(!isLogin);
               setError('');
@@ -244,23 +259,21 @@ export default function Profile() {
     );
   }
 
-  // Profile (logged in)
   return (
     <>
-      <div className="min-h-screen bg-black pb-24">
+      <div className="min-h-screen bg-[var(--bg)] pb-24">
         {/* Header with Settings Gear */}
-        <div className="flex justify-between items-center p-4 bg-black z-10 sticky top-0">
-          <h1 className="text-2xl font-bold text-white">Profile</h1>
+        <div className="flex justify-between items-center p-4 bg-[var(--bg)] z-10 sticky top-0 border-b border-[var(--border)]">
+          <h1 className="text-2xl font-bold text-[var(--text)]">Profile</h1>
           <button
             onClick={() => setShowSettings(true)}
-            className="text-gray-400 hover:text-white transition"
+            className="text-[var(--text)] hover:text-blue-400 transition"
           >
             <FaCog size={24} />
           </button>
         </div>
 
-        {/* Profile content */}
-        <div className="bg-gradient-to-b from-gray-900 to-black p-6">
+        <div className="p-6">
           <div className="flex flex-col items-center relative">
             <div className="relative">
               <div
@@ -276,7 +289,7 @@ export default function Profile() {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-4xl bg-gray-600">
+                  <div className="w-full h-full flex items-center justify-center text-4xl bg-gray-600 text-white">
                     {user.email[0].toUpperCase()}
                   </div>
                 )}
@@ -290,7 +303,7 @@ export default function Profile() {
               />
               <button
                 onClick={() => fileRef.current?.click()}
-                className="absolute bottom-0 right-0 bg-blue-600 rounded-full p-1.5 border-2 border-black"
+                className="absolute bottom-0 right-0 bg-blue-600 rounded-full p-1.5 border-2 border-[var(--bg)]"
               >
                 <FaCamera className="text-white text-xs" />
               </button>
@@ -300,7 +313,7 @@ export default function Profile() {
               {isEditing ? (
                 <div className="space-y-2">
                   <input
-                    className="bg-gray-800 text-white px-3 py-1 rounded text-center w-full"
+                    className="bg-gray-800 text-[var(--text)] px-3 py-1 rounded text-center w-full"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="Display Name"
@@ -337,7 +350,7 @@ export default function Profile() {
                 <>
                   <h2
                     className={`text-xl font-bold ${
-                      isAdmin ? 'text-yellow-400' : 'text-white'
+                      isAdmin ? 'text-yellow-400' : 'text-[var(--text)]'
                     }`}
                   >
                     {displayName}
@@ -366,15 +379,15 @@ export default function Profile() {
 
             <div className="flex gap-6 mt-4 text-center">
               <div>
-                <p className="text-white font-bold">{following.length}</p>
+                <p className="text-[var(--text)] font-bold">{following.length}</p>
                 <p className="text-gray-400 text-xs">Following</p>
               </div>
               <div>
-                <p className="text-white font-bold">{followers.length}</p>
+                <p className="text-[var(--text)] font-bold">{followers.length}</p>
                 <p className="text-gray-400 text-xs">Followers</p>
               </div>
               <div>
-                <p className="text-white font-bold">{totalLikes}</p>
+                <p className="text-[var(--text)] font-bold">{totalLikes}</p>
                 <p className="text-gray-400 text-xs">Likes</p>
               </div>
             </div>
@@ -388,7 +401,6 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* Stories */}
         {userStories.length > 0 && (
           <div className="px-4 mt-4">
             <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
@@ -417,11 +429,10 @@ export default function Profile() {
           </div>
         )}
 
-        {/* Posts grid */}
         <div className="px-2 mt-2">
-          <div className="border-t border-gray-800 pt-4">
+          <div className="border-t border-[var(--border)] pt-4">
             <div className="flex justify-between items-center px-2 mb-3">
-              <h3 className="text-white font-semibold">Your Posts</h3>
+              <h3 className="text-[var(--text)] font-semibold">Your Posts</h3>
               <button
                 onClick={() => router.push('/upload')}
                 className="text-blue-400 text-sm"
@@ -474,31 +485,31 @@ export default function Profile() {
 
       {/* Full‑screen Settings Modal */}
       {showSettings && (
-        <div className="fixed inset-0 bg-black z-50 flex flex-col">
-          <div className="flex items-center p-4 bg-gray-900 border-b border-gray-700">
+        <div className="fixed inset-0 bg-[var(--bg)] z-50 flex flex-col">
+          <div className="flex items-center p-4 bg-[var(--card-bg)] border-b border-[var(--border)]">
             <button
               onClick={() => setShowSettings(false)}
-              className="text-white hover:text-gray-300 mr-4"
+              className="text-[var(--text)] hover:text-gray-300 mr-4"
             >
               <FaArrowLeft size={24} />
             </button>
-            <h2 className="text-white text-xl font-bold">Settings</h2>
+            <h2 className="text-[var(--text)] text-xl font-bold">Settings</h2>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {/* 20+ settings */}
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">Dark Mode</span>
+            {/* Dark Mode Toggle */}
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">Dark Mode</span>
               <button
                 onClick={() => toggleSetting('darkMode')}
                 className={`px-4 py-1 rounded-full text-sm ${
-                  settings.darkMode ? 'bg-blue-600' : 'bg-gray-600'
+                  settings.darkMode ? 'bg-blue-600 text-white' : 'bg-gray-600 text-white'
                 }`}
               >
                 {settings.darkMode ? 'On' : 'Off'}
               </button>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">Language</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">Language</span>
               <select
                 className="bg-gray-700 text-white rounded p-1"
                 value={settings.language}
@@ -514,129 +525,129 @@ export default function Profile() {
                 <option>Japanese</option>
               </select>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">Notification Sounds</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">Notification Sounds</span>
               <button
                 onClick={() => toggleSetting('notificationSounds')}
                 className={`px-4 py-1 rounded-full text-sm ${
-                  settings.notificationSounds ? 'bg-green-600' : 'bg-gray-600'
+                  settings.notificationSounds ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
                 }`}
               >
                 {settings.notificationSounds ? 'On' : 'Off'}
               </button>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">AI Voice</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">AI Voice</span>
               <button
                 onClick={() => toggleSetting('aiVoice')}
                 className={`px-4 py-1 rounded-full text-sm ${
-                  settings.aiVoice ? 'bg-purple-600' : 'bg-gray-600'
+                  settings.aiVoice ? 'bg-purple-600 text-white' : 'bg-gray-600 text-white'
                 }`}
               >
                 {settings.aiVoice ? 'Enable' : 'Disable'}
               </button>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">Auto‑Play Videos</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">Auto‑Play Videos</span>
               <button
                 onClick={() => toggleSetting('autoPlayVideos')}
                 className={`px-4 py-1 rounded-full text-sm ${
-                  settings.autoPlayVideos ? 'bg-green-600' : 'bg-gray-600'
+                  settings.autoPlayVideos ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
                 }`}
               >
                 {settings.autoPlayVideos ? 'On' : 'Off'}
               </button>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">Auto‑Save Chats</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">Auto‑Save Chats</span>
               <button
                 onClick={() => toggleSetting('autoSaveChats')}
                 className={`px-4 py-1 rounded-full text-sm ${
-                  settings.autoSaveChats ? 'bg-green-600' : 'bg-gray-600'
+                  settings.autoSaveChats ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
                 }`}
               >
                 {settings.autoSaveChats ? 'On' : 'Off'}
               </button>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">Show Typing Indicator</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">Show Typing Indicator</span>
               <button
                 onClick={() => toggleSetting('showTypingIndicator')}
                 className={`px-4 py-1 rounded-full text-sm ${
-                  settings.showTypingIndicator ? 'bg-green-600' : 'bg-gray-600'
+                  settings.showTypingIndicator ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
                 }`}
               >
                 {settings.showTypingIndicator ? 'On' : 'Off'}
               </button>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">Message Read Receipts</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">Message Read Receipts</span>
               <button
                 onClick={() => toggleSetting('messageReadReceipts')}
                 className={`px-4 py-1 rounded-full text-sm ${
-                  settings.messageReadReceipts ? 'bg-green-600' : 'bg-gray-600'
+                  settings.messageReadReceipts ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
                 }`}
               >
                 {settings.messageReadReceipts ? 'On' : 'Off'}
               </button>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">Media Auto‑Download</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">Media Auto‑Download</span>
               <button
                 onClick={() => toggleSetting('mediaAutoDownload')}
                 className={`px-4 py-1 rounded-full text-sm ${
-                  settings.mediaAutoDownload ? 'bg-green-600' : 'bg-gray-600'
+                  settings.mediaAutoDownload ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
                 }`}
               >
                 {settings.mediaAutoDownload ? 'On' : 'Off'}
               </button>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">Privacy Mode</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">Privacy Mode</span>
               <button
                 onClick={() => toggleSetting('privacyMode')}
                 className={`px-4 py-1 rounded-full text-sm ${
-                  settings.privacyMode ? 'bg-red-600' : 'bg-gray-600'
+                  settings.privacyMode ? 'bg-red-600 text-white' : 'bg-gray-600 text-white'
                 }`}
               >
                 {settings.privacyMode ? 'On' : 'Off'}
               </button>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">Two‑Factor Auth</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">Two‑Factor Auth</span>
               <button
                 onClick={() => toggleSetting('twoFactorAuth')}
                 className={`px-4 py-1 rounded-full text-sm ${
-                  settings.twoFactorAuth ? 'bg-green-600' : 'bg-gray-600'
+                  settings.twoFactorAuth ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
                 }`}
               >
                 {settings.twoFactorAuth ? 'On' : 'Off'}
               </button>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">Biometric Login</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">Biometric Login</span>
               <button
                 onClick={() => toggleSetting('biometricLogin')}
                 className={`px-4 py-1 rounded-full text-sm ${
-                  settings.biometricLogin ? 'bg-green-600' : 'bg-gray-600'
+                  settings.biometricLogin ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
                 }`}
               >
                 {settings.biometricLogin ? 'On' : 'Off'}
               </button>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">Screen Lock</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">Screen Lock</span>
               <button
                 onClick={() => toggleSetting('screenLock')}
                 className={`px-4 py-1 rounded-full text-sm ${
-                  settings.screenLock ? 'bg-green-600' : 'bg-gray-600'
+                  settings.screenLock ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
                 }`}
               >
                 {settings.screenLock ? 'On' : 'Off'}
               </button>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">App Theme</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">App Theme</span>
               <select
                 className="bg-gray-700 text-white rounded p-1"
                 value={settings.appTheme}
@@ -649,8 +660,8 @@ export default function Profile() {
                 <option>System</option>
               </select>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">Text Size</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">Text Size</span>
               <select
                 className="bg-gray-700 text-white rounded p-1"
                 value={settings.textSize}
@@ -663,8 +674,8 @@ export default function Profile() {
                 <option>Large</option>
               </select>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">Chat Bubble Style</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">Chat Bubble Style</span>
               <select
                 className="bg-gray-700 text-white rounded p-1"
                 value={settings.chatBubbleStyle}
@@ -677,74 +688,74 @@ export default function Profile() {
                 <option>Sharp</option>
               </select>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">Send on Enter</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">Send on Enter</span>
               <button
                 onClick={() => toggleSetting('sendOnEnter')}
                 className={`px-4 py-1 rounded-full text-sm ${
-                  settings.sendOnEnter ? 'bg-green-600' : 'bg-gray-600'
+                  settings.sendOnEnter ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
                 }`}
               >
                 {settings.sendOnEnter ? 'On' : 'Off'}
               </button>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">Offline Mode</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">Offline Mode</span>
               <button
                 onClick={() => toggleSetting('offlineMode')}
                 className={`px-4 py-1 rounded-full text-sm ${
-                  settings.offlineMode ? 'bg-green-600' : 'bg-gray-600'
+                  settings.offlineMode ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
                 }`}
               >
                 {settings.offlineMode ? 'On' : 'Off'}
               </button>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">Data Saver</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">Data Saver</span>
               <button
                 onClick={() => toggleSetting('dataSaver')}
                 className={`px-4 py-1 rounded-full text-sm ${
-                  settings.dataSaver ? 'bg-green-600' : 'bg-gray-600'
+                  settings.dataSaver ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
                 }`}
               >
                 {settings.dataSaver ? 'On' : 'Off'}
               </button>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">High Quality Media</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">High Quality Media</span>
               <button
                 onClick={() => toggleSetting('highQualityMedia')}
                 className={`px-4 py-1 rounded-full text-sm ${
-                  settings.highQualityMedia ? 'bg-green-600' : 'bg-gray-600'
+                  settings.highQualityMedia ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
                 }`}
               >
                 {settings.highQualityMedia ? 'On' : 'Off'}
               </button>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">Story Auto‑Play</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">Story Auto‑Play</span>
               <button
                 onClick={() => toggleSetting('storyAutoPlay')}
                 className={`px-4 py-1 rounded-full text-sm ${
-                  settings.storyAutoPlay ? 'bg-green-600' : 'bg-gray-600'
+                  settings.storyAutoPlay ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
                 }`}
               >
                 {settings.storyAutoPlay ? 'On' : 'Off'}
               </button>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">Story Mute</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">Story Mute</span>
               <button
                 onClick={() => toggleSetting('storyMute')}
                 className={`px-4 py-1 rounded-full text-sm ${
-                  settings.storyMute ? 'bg-red-600' : 'bg-gray-600'
+                  settings.storyMute ? 'bg-red-600 text-white' : 'bg-gray-600 text-white'
                 }`}
               >
                 {settings.storyMute ? 'Muted' : 'Unmuted'}
               </button>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">Notification Preview</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">Notification Preview</span>
               <select
                 className="bg-gray-700 text-white rounded p-1"
                 value={settings.notificationPreview}
@@ -760,8 +771,8 @@ export default function Profile() {
                 <option>None</option>
               </select>
             </div>
-            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
-              <span className="text-white">Call Notification</span>
+            <div className="flex justify-between items-center border-b border-[var(--border)] pb-2">
+              <span className="text-[var(--text)]">Call Notification</span>
               <select
                 className="bg-gray-700 text-white rounded p-1"
                 value={settings.callNotification}
@@ -790,4 +801,4 @@ export default function Profile() {
       )}
     </>
   );
-}
+         }
