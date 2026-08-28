@@ -7,6 +7,40 @@ import { useRouter } from 'next/navigation';
 import FloatingPlusButton from '@/components/FloatingPlusButton';
 import { fetchData } from '@/lib/db';
 
+// Define the settings type
+type SettingsKeys = 
+  | 'darkMode'
+  | 'language'
+  | 'notificationSounds'
+  | 'aiVoice'
+  | 'autoPlayVideos'
+  | 'autoSaveChats'
+  | 'showTypingIndicator'
+  | 'messageReadReceipts'
+  | 'mediaAutoDownload'
+  | 'privacyMode'
+  | 'twoFactorAuth'
+  | 'biometricLogin'
+  | 'screenLock'
+  | 'appTheme'
+  | 'textSize'
+  | 'chatBubbleStyle'
+  | 'sendOnEnter'
+  | 'offlineMode'
+  | 'dataSaver'
+  | 'highQualityMedia'
+  | 'storyAutoPlay'
+  | 'storyMute'
+  | 'notificationPreview'
+  | 'callNotification'
+  | 'groupNotification';
+
+type SettingsType = {
+  [K in SettingsKeys]: K extends 'language' | 'appTheme' | 'textSize' | 'chatBubbleStyle' | 'notificationPreview' | 'callNotification' | 'groupNotification'
+    ? string
+    : boolean;
+};
+
 export default function Profile() {
   const { user, loading, login, logout, updateUser } = useAuth();
   const router = useRouter();
@@ -30,8 +64,8 @@ export default function Profile() {
   const [showSettings, setShowSettings] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Settings state
-  const [settings, setSettings] = useState({
+  // Settings state with explicit type
+  const [settings, setSettings] = useState<SettingsType>({
     darkMode: true,
     language: 'English',
     notificationSounds: true,
@@ -59,8 +93,16 @@ export default function Profile() {
     groupNotification: 'All Messages',
   });
 
-  const toggleSetting = (key: string) => {
-    setSettings(prev => ({ ...prev, [key]: !prev[key] }));
+  // Toggle function with proper typing
+  const toggleSetting = (key: SettingsKeys) => {
+    setSettings(prev => {
+      const value = prev[key];
+      if (typeof value === 'boolean') {
+        return { ...prev, [key]: !value };
+      }
+      // For string values, we'll handle them via select onChange, so we don't toggle.
+      return prev;
+    });
   };
 
   const loadUserData = async () => {
@@ -430,4 +472,4 @@ export default function Profile() {
       )}
     </>
   );
-}
+    }
