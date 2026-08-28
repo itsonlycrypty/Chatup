@@ -86,7 +86,7 @@ export default function ChatRoom() {
     return () => clearInterval(interval);
   }, [id, user]);
 
-  // ----- AI response via our API route (which uses Grok) -----
+  // ----- AI response using Grok (no fallback) -----
   const getAIResponse = async (userMessage: string): Promise<string> => {
     try {
       const res = await fetch('/api/ai/chat', {
@@ -105,21 +105,9 @@ export default function ChatRoom() {
       return data.reply || 'Sorry, I could not generate a response.';
     } catch (e) {
       console.error('AI fetch error:', e);
-      // Fallback to rule‑based
-      return getFallbackResponse(userMessage);
+      // No fallback – return a friendly error message
+      return "I'm sorry, I'm having trouble connecting to my brain right now. Please try again later.";
     }
-  };
-
-  // Fallback rule‑based response (in case the API fails)
-  const getFallbackResponse = (userMessage: string): string => {
-    const lower = userMessage.toLowerCase().trim();
-    const name = recipient?.displayName || 'AI';
-    if (lower.includes('hello') || lower.includes('hi')) return `Hello! I'm ${name}. How can I help?`;
-    if (lower.includes('how are you')) return `I'm an AI, but I'm functioning perfectly!`;
-    if (lower.includes('who are you')) return `I'm ${name}, an AI assistant.`;
-    if (lower.includes('help')) return `Sure! I'm here to help.`;
-    if (lower.includes('bye')) return 'Goodbye! Take care.';
-    return `That's interesting. Could you tell me more? (I'm ${name})`;
   };
 
   // ----- Delete any message -----
@@ -274,4 +262,4 @@ export default function ChatRoom() {
       </div>
     </div>
   );
-    }
+                                               }
