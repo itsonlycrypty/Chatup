@@ -22,7 +22,7 @@ export default function VideoEmbed({ url }: { url: string }) {
       }
       setEmbedUrl(`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`);
     }
-    // Direct video (mp4, webm, etc.)
+    // Direct video
     else if (url.match(/\.(mp4|webm|mov|avi)$/i) || url.includes('mov_bbb.mp4')) {
       setType('direct');
       setEmbedUrl(url);
@@ -74,10 +74,9 @@ export default function VideoEmbed({ url }: { url: string }) {
     );
   }
 
-  // For unknown types, show a simple message (no "Open Link")
   return (
     <div className="w-full h-full bg-gray-800 flex items-center justify-center p-4 text-gray-400">
       <span>Video not available</span>
     </div>
   );
-        }
+    }
