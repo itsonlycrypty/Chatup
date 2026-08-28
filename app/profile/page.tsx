@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { FaCamera, FaSignOutAlt, FaEdit, FaCheck, FaTimes, FaHeart, FaPlus, FaClock, FaCheckCircle } from 'react-icons/fa';
+import { FaCamera, FaSignOutAlt, FaEdit, FaCheck, FaTimes, FaHeart, FaPlus, FaClock, FaCheckCircle, FaCog } from 'react-icons/fa';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import FloatingPlusButton from '@/components/FloatingPlusButton';
@@ -27,6 +27,7 @@ export default function Profile() {
   const [totalLikes, setTotalLikes] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const loadUserData = async () => {
@@ -107,6 +108,14 @@ export default function Profile() {
 
   return (
     <div className="min-h-screen bg-black pb-24">
+      {/* Header with Settings Gear */}
+      <div className="flex justify-between items-center p-4 bg-black z-10 sticky top-0">
+        <h1 className="text-2xl font-bold text-white">Profile</h1>
+        <button onClick={() => setShowSettings(true)} className="text-gray-400 hover:text-white transition">
+          <FaCog size={24} />
+        </button>
+      </div>
+
       <div className="bg-gradient-to-b from-gray-900 to-black p-6">
         <div className="flex flex-col items-center relative">
           <div className="relative">
@@ -205,6 +214,49 @@ export default function Profile() {
       </div>
 
       <FloatingPlusButton />
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-2xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-white text-xl font-bold">Settings</h2>
+              <button onClick={() => setShowSettings(false)} className="text-gray-400 hover:text-white">
+                <FaTimes size={20} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+                <span className="text-white">Dark Mode</span>
+                <button className="bg-blue-600 px-4 py-1 rounded-full text-sm">Toggle</button>
+              </div>
+              <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+                <span className="text-white">Language</span>
+                <select className="bg-gray-700 text-white rounded p-1">
+                  <option>English</option>
+                  <option>Spanish</option>
+                  <option>French</option>
+                </select>
+              </div>
+              <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+                <span className="text-white">Notification Sounds</span>
+                <button className="bg-green-600 px-4 py-1 rounded-full text-sm">On</button>
+              </div>
+              <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+                <span className="text-white">AI Voice</span>
+                <button className="bg-purple-600 px-4 py-1 rounded-full text-sm">Enable</button>
+              </div>
+              <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+                <span className="text-white">Auto‑Play Videos</span>
+                <button className="bg-green-600 px-4 py-1 rounded-full text-sm">On</button>
+              </div>
+              <button onClick={() => setShowSettings(false)} className="w-full bg-red-600 text-white py-2 rounded-xl mt-4 hover:bg-red-700 transition">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
