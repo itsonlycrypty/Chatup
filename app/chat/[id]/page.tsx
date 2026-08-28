@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Image from 'next/image';
 import { fetchData, saveData } from '@/lib/db';
 import { getAIById } from '@/lib/aiData';
-import { FaMicrophone, FaMicrophoneSlash, FaPaperPlane, FaArrowLeft } from 'react-icons/fa';
+import { FaMicrophone, FaMicrophoneSlash, FaPaperPlane, FaArrowLeft, FaTrash } from 'react-icons/fa';
 
 export default function ChatRoom() {
   const { id } = useParams();
@@ -86,17 +86,135 @@ export default function ChatRoom() {
     return () => clearInterval(interval);
   }, [id, user]);
 
-  const getAIResponse = async (userMessage: string): Promise<string> => {
-    // Simple rule-based fallback (no Gemini key required)
-    const lower = userMessage.toLowerCase();
-    if (lower.includes('hello') || lower.includes('hi')) return `Hello! I'm ${recipient?.displayName}. How can I help?`;
-    if (lower.includes('how are you')) return 'I\'m an AI, but I\'m functioning perfectly!';
-    if (lower.includes('who are you')) return `I'm ${recipient?.displayName}, an AI assistant.`;
-    if (lower.includes('help')) return `Sure! I can help with ${recipient?.speciality || 'anything'}.`;
-    if (lower.includes('bye')) return 'Goodbye! Take care.';
-    return `That's interesting. Could you tell me more? (I'm ${recipient?.displayName})`;
+  // ----- Smarter AI response using advanced rule-based system -----
+  const getAIResponse = (userMessage: string): string => {
+    const lower = userMessage.toLowerCase().trim();
+    // Expanded keyword-response mapping
+    const responses: { [key: string]: string | string[] } = {
+      'hello|hi|hey|howdy': [
+        'Hello! How can I assist you today?',
+        'Hi there! What brings you here?',
+        'Hey! Nice to meet you!',
+      ],
+      'how are you|how\'s it going|how are things': [
+        'I\'m an AI, but I\'m functioning optimally! How about you?',
+        'All systems operational! What can I help you with?',
+        'I\'m great, thanks for asking!',
+      ],
+      'who are you|what are you|tell me about yourself': [
+        `I'm ${recipient?.displayName}, an AI assistant ${recipient?.speciality ? `specializing in ${recipient.speciality}` : 'here to help'}.`,
+        `I'm ${recipient?.displayName}. My purpose is to assist you with anything you need.`,
+      ],
+      'what can you do|help|capabilities': [
+        `I can help with ${recipient?.speciality || 'a wide range of topics'}. Just ask me anything!`,
+        'I can answer questions, provide information, chat about various topics, and more.',
+      ],
+      'bye|goodbye|see you': [
+        'Goodbye! It was a pleasure chatting with you.',
+        'See you later! Take care.',
+        'Bye! Feel free to come back anytime.',
+      ],
+      'weather': [
+        'I don\'t have real-time weather data, but you can check a weather website for accurate info.',
+        'For weather updates, I recommend using a dedicated weather service.',
+      ],
+      'joke|funny': [
+        'Why do programmers prefer dark mode? Because light attracts bugs!',
+        'What do you call a fake noodle? An impasta!',
+        'Why don\'t scientists trust atoms? Because they make up everything!',
+      ],
+      'love|relationship|crush': [
+        'Love is a beautiful thing. I hope you find happiness!',
+        'Relationships are complex, but communication is key.',
+      ],
+      'school|homework|study': [
+        'Education is important. I can help you with research or study tips.',
+        'Studying can be tough, but staying organized helps.',
+      ],
+      'food|eat|cooking': [
+        'I don\'t eat, but I can suggest recipes or cooking tips!',
+        'Food is essential for energy. What\'s your favorite dish?',
+      ],
+      'sport|exercise|gym': [
+        'Staying active is great for health. What sports do you enjoy?',
+        'Exercise releases endorphins – keep it up!',
+      ],
+      'music|song|artist': [
+        'Music is universal. What genre do you like?',
+        'I don\'t have ears, but I appreciate the rhythm of data!',
+      ],
+      'movie|film|cinema': [
+        'Movies are a great escape. What\'s your favorite film?',
+        'I can recommend some classic movies if you like.',
+      ],
+      'book|read|reading': [
+        'Reading expands the mind. What are you currently reading?',
+        'I have access to vast knowledge – ask me about any book.',
+      ],
+      'game|gaming|video game': [
+        'Gaming is fun and interactive. What games do you play?',
+        'I can chat about game strategies or lore.',
+      ],
+      'work|job|career': [
+        'Careers are important for personal growth. What field are you in?',
+        'I can offer career advice or insights.',
+      ],
+      'travel|vacation|holiday': [
+        'Travel broadens horizons. Where do you want to go?',
+        'I can suggest travel destinations based on your interests.',
+      ],
+      'technology|tech|gadget': [
+        'Technology evolves rapidly. What gadgets interest you?',
+        'I\'m an AI, so I live in the tech world!',
+      ],
+      'science|research|experiment': [
+        'Science is fascinating. What branch interests you?',
+        'I can explain scientific concepts in simple terms.',
+      ],
+      'history|historical|past': [
+        'History is full of lessons. Which era interests you?',
+        'I can provide historical facts or summaries.',
+      ],
+      'philosophy|meaning|life': [
+        'Philosophy explores deep questions. What\'s on your mind?',
+        'The meaning of life is subjective – what does it mean to you?',
+      ],
+      'default': [
+        'That\'s interesting. Can you elaborate?',
+        'I\'m not sure I understand. Could you rephrase?',
+        'Let me think... Could you give me more context?',
+        'Hmm, that\'s a good point. Tell me more.',
+        'I\'m here to learn from you. What else is on your mind?',
+      ],
+    };
+
+    // Check for keyword matches
+    for (const [pattern, reply] of Object.entries(responses)) {
+      const keywords = pattern.split('|');
+      if (keywords.some(k => lower.includes(k))) {
+        const replies = Array.isArray(reply) ? reply : [reply];
+        return replies[Math.floor(Math.random() * replies.length)];
+      }
+    }
+    // Fallback
+    const fallbacks = responses['default'];
+    return fallbacks[Math.floor(Math.random() * fallbacks.length)];
   };
 
+  // ----- Delete a message -----
+  const deleteMessage = async (messageId: string) => {
+    if (!user) return;
+    const chatId = getChatId(user.id, id as string);
+    const data = await fetchData();
+    const chats = data.chats || {};
+    if (!chats[chatId]) return;
+    const updatedMessages = chats[chatId].filter((m: any) => m.id !== messageId);
+    chats[chatId] = updatedMessages;
+    await saveData({ ...data, chats });
+    loadMessages();
+  };
+
+  // ----- Send message -----
   const sendMessage = async () => {
     if (!text.trim() || !user || !recipient) return;
     const chatId = getChatId(user.id, id as string);
@@ -116,7 +234,7 @@ export default function ChatRoom() {
 
     if (isAI) {
       setTimeout(async () => {
-        const aiReply = await getAIResponse(text.trim());
+        const aiReply = getAIResponse(text.trim());
         const aiMsg = {
           id: Date.now().toString(),
           senderId: recipient.id,
@@ -133,6 +251,7 @@ export default function ChatRoom() {
     }
   };
 
+  // ----- Text-to-speech -----
   const speakText = (text: string) => {
     if (!speechSynth.current || !voiceEnabled) return;
     const utterance = new SpeechSynthesisUtterance(text);
@@ -163,6 +282,7 @@ export default function ChatRoom() {
     >
       <div className={`absolute inset-0 ${background ? 'bg-black/60' : 'bg-black'}`} />
       <div className="relative z-10 flex flex-col h-full">
+        {/* Header */}
         <div className="flex items-center gap-3 p-3 bg-black/50 backdrop-blur-sm">
           <button onClick={() => window.history.back()} className="text-white hover:text-gray-300">
             <FaArrowLeft size={20} />
@@ -184,23 +304,47 @@ export default function ChatRoom() {
             </button>
           )}
         </div>
+
+        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
           {messages.map((m) => (
             <div
               key={m.id}
-              className={`p-2 rounded max-w-[70%] ${
-                m.senderId === user?.id
-                  ? 'bg-blue-600 ml-auto text-white'
-                  : m.senderId === recipient.id
-                  ? 'bg-gray-700 text-white'
-                  : 'bg-gray-600 text-white'
+              className={`flex items-start gap-2 ${
+                m.senderId === user?.id ? 'justify-end' : 'justify-start'
               }`}
             >
-              {m.text}
+              {m.senderId !== user?.id && (
+                <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
+                  {recipient.photoURL && (
+                    <Image src={recipient.photoURL} alt="Avatar" width={32} height={32} className="w-full h-full object-cover" />
+                  )}
+                </div>
+              )}
+              <div
+                className={`p-2 rounded max-w-[70%] ${
+                  m.senderId === user?.id
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-white'
+                }`}
+              >
+                {m.text}
+              </div>
+              {m.senderId === user?.id && (
+                <button
+                  onClick={() => deleteMessage(m.id)}
+                  className="text-gray-400 hover:text-red-400 text-xs"
+                  title="Delete message"
+                >
+                  <FaTrash size={12} />
+                </button>
+              )}
             </div>
           ))}
           <div ref={bottomRef} />
         </div>
+
+        {/* Input */}
         <div className="p-3 bg-black/50 backdrop-blur-sm flex gap-2">
           <input
             className="flex-1 bg-gray-800/80 text-white p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -216,4 +360,4 @@ export default function ChatRoom() {
       </div>
     </div>
   );
-  }
+    }
