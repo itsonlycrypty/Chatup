@@ -25,7 +25,6 @@ export default function Feed() {
 
   const hasFetched = useRef(false);
 
-  // Load shorts – only keep YouTube-based ones, remove TikTok ones
   const loadShortsFromDB = async () => {
     const data = await fetchData();
     const allShorts = (data.shorts || []).filter((s: any) => {
@@ -36,7 +35,6 @@ export default function Feed() {
     setShorts(allShorts);
   };
 
-  // Aggressive cleanup: remove any short that is not from youtube_bot or doesn't start with 'yt_'
   const cleanupDatabase = async () => {
     const data = await fetchData();
     let shorts = data.shorts || [];
@@ -45,19 +43,16 @@ export default function Feed() {
     });
     if (validShorts.length !== shorts.length) {
       await saveData({ ...data, shorts: validShorts });
-      console.log('🧹 Removed old TikTok/demo shorts from database');
+      console.log('🧹 Cleaned up old shorts');
     }
     return validShorts;
   };
 
-  // Fetch fresh YouTube shorts (50 at a time)
   const fetchVideos = async () => {
     setLoading(true);
     setError(null);
     try {
-      // First, clean up any old videos
       await cleanupDatabase();
-
       const res = await fetch('/api/tiktok');
       if (!res.ok) {
         const errorData = await res.json();
@@ -78,9 +73,7 @@ export default function Feed() {
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         }));
         setShorts(items);
-        // Replace all existing shorts with these fresh ones (so no old ones remain)
         const binData = await fetchData();
-        // Remove all previous youtube_bot shorts
         let existingShorts = binData.shorts || [];
         existingShorts = existingShorts.filter((s: any) => s.userId !== 'youtube_bot');
         const allShorts = [...items, ...existingShorts];
@@ -95,7 +88,6 @@ export default function Feed() {
     setLoading(false);
   };
 
-  // On mount, clean and fetch
   useEffect(() => {
     const init = async () => {
       await cleanupDatabase();
@@ -108,13 +100,9 @@ export default function Feed() {
     init();
   }, []);
 
-  // Refresh on visibility change (user returns to app)
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        // Refresh when user comes back to the tab
-        fetchVideos();
-      }
+      if (!document.hidden) fetchVideos();
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -126,7 +114,6 @@ export default function Feed() {
     setRefreshing(false);
   };
 
-  // Like/Unlike toggle (unchanged)
   const toggleLike = async (shortId: string) => {
     if (!user) return;
     const data = await fetchData();
@@ -225,9 +212,7 @@ export default function Feed() {
         <div className="absolute inset-0">
           <VideoEmbed url={s.media} />
         </div>
-
         <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
-
         <div className="absolute bottom-28 left-4 right-20 z-10">
           <Link href={s.userId === 'youtube_bot' ? '#' : `/profile/${s.userId}`} className="flex items-center gap-2">
             {postUser?.photoURL ? (
@@ -253,7 +238,6 @@ export default function Feed() {
           )}
           {s.text && <p className="text-white text-sm mt-1 line-clamp-3">{s.text}</p>}
         </div>
-
         <div className="absolute bottom-40 right-4 z-10 flex flex-col items-center gap-5">
           <button onClick={() => toggleLike(s.id)} className="flex flex-col items-center text-white">
             <div className={`p-3 rounded-full backdrop-blur-sm transition ${
@@ -263,14 +247,12 @@ export default function Feed() {
             </div>
             <span className="text-xs mt-1">{s.likes || 0}</span>
           </button>
-
           <button onClick={() => window.location.href = `/post/${s.id}`} className="flex flex-col items-center text-white">
             <div className="bg-white/20 backdrop-blur-sm p-3 rounded-full hover:bg-white/30 transition">
               <FaComment size={24} />
             </div>
             <span className="text-xs mt-1">{s.comments?.length || 0}</span>
           </button>
-
           <button onClick={() => sharePost(s)} className="flex flex-col items-center text-white">
             <div className="bg-white/20 backdrop-blur-sm p-3 rounded-full hover:bg-white/30 transition">
               <FaShare size={24} />
@@ -278,7 +260,6 @@ export default function Feed() {
             <span className="text-xs mt-1">Share</span>
           </button>
         </div>
-
         {user && (
           <div className="absolute bottom-4 left-4 right-4 z-10 flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-full p-1.5 border border-white/20">
             <input
@@ -302,23 +283,14 @@ export default function Feed() {
       <div className="flex justify-between items-center p-4 bg-black z-10 sticky top-0">
         <h1 className="text-2xl font-bold text-white">Chat Up</h1>
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing || loading}
-            className="text-gray-400 hover:text-white transition disabled:opacity-50"
-          >
-            <FaSync className={refreshing || loading ? 'animate-spin' : ''} size={20} />
-          </button>
-          <button onClick={openSearch} className="text-white hover:text-blue-400">
-            <FaSearch size={22} />
-          </button>
+          <button onClick={handleRefresh} disabled={refreshing || loading} className="text-gray-400 hover:text-white transition disabled:opacity-50"><FaSync className={refreshing || loading ? 'animate-spin' : ''} size={20} /></button>
+          <button onClick={openSearch} className="text-white hover:text-blue-400"><FaSearch size={22} /></button>
         </div>
       </div>
-
       {loading ? (
         <div className="flex items-center justify-center h-[80vh]">
           <div className="text-center">
-            <div className="animate-spin h-12 w-12 border-t-4 border-b-4 border-blue-500 rounded-full mx-auto mb-4"></div>
+            <div className="animate-spin h-12 w-12 border-t-4 border-b-4 border-blue-500 rounded-full mx-auto mb-4" />
             <p className="text-gray-400">Loading videos...</p>
           </div>
         </div>
@@ -342,9 +314,7 @@ export default function Feed() {
           {shorts.map((s) => renderShort(s))}
         </div>
       )}
-
       <FloatingPlusButton />
-
       {showSearch && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -390,4 +360,4 @@ export default function Feed() {
       )}
     </div>
   );
-    }
+      }
