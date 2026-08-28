@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
-// Your Grok API key (hardcoded, server‑side only)
-const GROK_API_KEY = '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';
+// Your Groq API key
+const GROQ_API_KEY = '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';
 
 export async function POST(request: Request) {
   const { systemPrompt, userMessage } = await request.json();
@@ -14,15 +14,15 @@ export async function POST(request: Request) {
   }
 
   try {
-    // xAI Grok API endpoint
-    const res = await fetch('https://api.x.ai/v1/chat/completions', {
+    // Groq API (OpenAI‑compatible)
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROK_API_KEY}`,
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'grok-1-latest', // or 'grok-1' – check your plan
+        model: 'llama-3.3-70b-versatile', // free & powerful
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage },
@@ -34,15 +34,9 @@ export async function POST(request: Request) {
 
     if (!res.ok) {
       const errorText = await res.text();
-      console.error('Grok API error:', res.status, errorText);
-      // Try to parse error
-      let errorMsg = `Grok API error: ${res.status}`;
-      try {
-        const errJson = JSON.parse(errorText);
-        if (errJson.error) errorMsg = errJson.error.message;
-      } catch (_) {}
+      console.error('Groq API error:', res.status, errorText);
       return NextResponse.json(
-        { error: errorMsg },
+        { error: `Groq API error: ${res.status}` },
         { status: res.status }
       );
     }
@@ -52,9 +46,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ reply });
   } catch (error: any) {
-    console.error('Grok fetch error:', error);
+    console.error('Groq fetch error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to get response from Grok' },
+      { error: error.message || 'Failed to get response from Groq' },
       { status: 500 }
     );
   }
