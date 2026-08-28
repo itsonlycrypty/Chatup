@@ -74,11 +74,10 @@ export default function VideoEmbed({ url }: { url: string }) {
     );
   }
 
+  // For unknown types, show a simple message (no "Open Link")
   return (
-    <div className="w-full h-full bg-gray-800 flex items-center justify-center p-4">
-      <a href={embedUrl || url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline break-all">
-        🔗 Open Link
-      </a>
+    <div className="w-full h-full bg-gray-800 flex items-center justify-center p-4 text-gray-400">
+      <span>Video not available</span>
     </div>
   );
-             }
+        }
