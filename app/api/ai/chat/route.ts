@@ -14,7 +14,6 @@ export async function POST(request: Request) {
   }
 
   try {
-    // Groq API (OpenAI‑compatible)
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -22,7 +21,7 @@ export async function POST(request: Request) {
         'Authorization': `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile', // free & powerful
+        model: 'mixtral-8x7b-32768', // ✅ Using Mixtral
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage },
@@ -35,10 +34,12 @@ export async function POST(request: Request) {
     if (!res.ok) {
       const errorText = await res.text();
       console.error('Groq API error:', res.status, errorText);
-      return NextResponse.json(
-        { error: `Groq API error: ${res.status}` },
-        { status: res.status }
-      );
+      let errorMsg = `Groq error ${res.status}`;
+      try {
+        const errJson = JSON.parse(errorText);
+        if (errJson.error?.message) errorMsg = errJson.error.message;
+      } catch (_) {}
+      return NextResponse.json({ error: errorMsg }, { status: res.status });
     }
 
     const data = await res.json();
@@ -52,4 +53,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-  }
+            }
