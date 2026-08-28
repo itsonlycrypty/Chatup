@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
-// Your Groq API key
-const GROQ_API_KEY = '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';
+// Your new Groq API key
+const GROQ_API_KEY = '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';
 
 export async function POST(request: Request) {
   const { systemPrompt, userMessage } = await request.json();
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
         'Authorization': `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'mixtral-8x7b-32768', // ✅ Using Mixtral
+        model: 'mixtral-8x7b-32768',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage },
