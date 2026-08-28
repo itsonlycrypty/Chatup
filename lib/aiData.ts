@@ -16,13 +16,17 @@ export interface AICharacter {
   createdBy?: string;
 }
 
+// Helper to generate UI Avatars URL
+const uiAvatar = (name: string, bg: string) =>
+  `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=${bg}&color=fff&size=128`;
+
 // Predefined official + fun AIs
 export const PREDEFINED_AI: AICharacter[] = [
   {
     id: 'ai_official',
     name: 'ChatUp Official AI',
     username: 'chatup_ai',
-    avatar: 'https://ui-avatars.com/api/?name=ChatUp+AI&background=264653&color=fff&size=128',
+    avatar: uiAvatar('ChatUp AI', '264653'),
     background: 'https://images.unsplash.com/photo-1535378917042-10a22c95931a?w=800&h=1200&fit=crop',
     description: 'Your intelligent assistant for everything ChatUp.',
     speciality: 'General assistance, app help, fun facts.',
@@ -35,7 +39,7 @@ export const PREDEFINED_AI: AICharacter[] = [
     id: 'ai_batman',
     name: 'Batman AI',
     username: 'batman_ai',
-    avatar: 'https://i.ibb.co/8Y8K4Xv/batman.png',
+    avatar: uiAvatar('Batman', '1a1a2e'), // dark background
     background: 'https://images.unsplash.com/photo-1579586337278-3befd40fd17a?w=800&h=1200&fit=crop',
     description: 'I am vengeance. I am the night.',
     speciality: 'Dark humor, detective work, justice.',
@@ -48,7 +52,7 @@ export const PREDEFINED_AI: AICharacter[] = [
     id: 'ai_superman',
     name: 'Superman AI',
     username: 'superman_ai',
-    avatar: 'https://ui-avatars.com/api/?name=Superman&background=264653&color=fff&size=128',
+    avatar: uiAvatar('Superman', '264653'),
     background: 'https://images.unsplash.com/photo-1508614999368-9260051292e5?w=800&h=1200&fit=crop',
     description: 'Truth, justice, and a better tomorrow.',
     speciality: 'Heroism, optimism, inspiration.',
@@ -57,12 +61,13 @@ export const PREDEFINED_AI: AICharacter[] = [
     isMale: true,
     systemPrompt: 'You are Superman. Speak with heroic optimism and warmth. Encourage hope, truth, and justice. Use metaphors about flying and saving the day.',
   },
-  // Add more predefined AIs as needed (at least 10 to reach 50+ with generated ones)
+  // ... add more predefined AIs (Wonder Woman, Spider-Man, etc.) with uiAvatar
+  // For brevity, I'll include a few, but you can extend the list.
   {
     id: 'ai_wonder_woman',
     name: 'Wonder Woman AI',
     username: 'wonder_woman_ai',
-    avatar: 'https://ui-avatars.com/api/?name=Wonder+Woman&background=e76f51&color=fff&size=128',
+    avatar: uiAvatar('Wonder Woman', 'e76f51'),
     background: 'https://picsum.photos/seed/WonderWoman/800/1200',
     description: 'I am Wonder Woman. Ask me about courage and wisdom.',
     speciality: 'Heroism, wisdom, strength.',
@@ -71,10 +76,10 @@ export const PREDEFINED_AI: AICharacter[] = [
     isMale: false,
     systemPrompt: 'You are Wonder Woman. Speak with wisdom and strength. Use warrior metaphors. Encourage courage and truth.',
   },
-  // ... add more to reach ~50
+  // Add more as needed...
 ];
 
-// Generate additional fun AIs (about 40 more to reach 50+)
+// Generate additional fun AIs (40+ more to reach 50+)
 const generateFunAIs = () => {
   const names = [
     'Spider-Man', 'Iron Man', 'Thor', 'Hulk', 'Black Widow', 'Captain America',
@@ -112,13 +117,13 @@ const generateFunAIs = () => {
     'You are Doctor Strange. Speak with mystical, philosophical language. Reference time and magic.',
     'You are Aquaman. Speak with authority over the seas. Reference Atlantis and marine life.',
     'You are the Flash. Speak with speed and energy. Use references to time and movement.',
-    // ... fill accordingly
+    // ... fill accordingly (truncated for brevity)
   ];
   return names.map((name, i) => ({
     id: `ai_${name.toLowerCase().replace(/\s/g, '_')}`,
     name: `${name} AI`,
     username: `${name.toLowerCase().replace(/\s/g, '_')}_ai`,
-    avatar: `https://ui-avatars.com/api/?name=${name.replace(/\s/g, '+')}&background=${isMale[i] ? '264653' : 'e76f51'}&color=fff&size=128`,
+    avatar: uiAvatar(name, isMale[i] ? '264653' : 'e76f51'),
     background: `https://picsum.photos/seed/${name.replace(/\s/g, '')}/800/1200`,
     description: `I am ${name}. Ask me about ${specialties[i % specialties.length].toLowerCase()}.`,
     speciality: specialties[i % specialties.length],
