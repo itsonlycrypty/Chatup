@@ -5,7 +5,19 @@ import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { fetchData, saveData } from '@/lib/db';
 import { getAIById } from '@/lib/aiData';
-import { FaMicrophone, FaMicrophoneSlash, FaPaperPlane, FaArrowLeft, FaTrash, FaEdit, FaCheck, FaTimes } from 'react-icons/fa';
+import {
+  FaMicrophone,
+  FaMicrophoneSlash,
+  FaPaperPlane,
+  FaArrowLeft,
+  FaTrash,
+  FaEdit,
+  FaCheck,
+  FaTimes,
+  FaCog,
+  FaEraser,
+  FaFolderMinus,
+} from 'react-icons/fa';
 
 export default function ChatRoom() {
   const { id } = useParams();
@@ -21,6 +33,7 @@ export default function ChatRoom() {
   const [systemPrompt, setSystemPrompt] = useState('');
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const speechSynth = useRef<SpeechSynthesis | null>(null);
 
@@ -111,7 +124,7 @@ export default function ChatRoom() {
     }
   };
 
-  // ----- Delete message -----
+  // ----- Delete a single message -----
   const deleteMessage = async (messageId: string) => {
     if (!user) return;
     const chatId = getChatId(user.id, id as string);
@@ -141,11 +154,41 @@ export default function ChatRoom() {
     const idx = chats[chatId].findIndex((m: any) => m.id === editingMessageId);
     if (idx === -1) return;
     chats[chatId][idx].text = editText.trim();
-    chats[chatId][idx].edited = true; // mark as edited
+    chats[chatId][idx].edited = true;
     await saveData({ ...data, chats });
     setEditingMessageId(null);
     setEditText('');
     loadMessages();
+  };
+
+  // ----- Reset chat (clear all messages) -----
+  const resetChat = async () => {
+    if (!user || !id) return;
+    if (!confirm('Reset this chat? All messages will be deleted.')) return;
+    const chatId = getChatId(user.id, id as string);
+    const data = await fetchData();
+    const chats = data.chats || {};
+    if (chats[chatId]) {
+      chats[chatId] = [];
+      await saveData({ ...data, chats });
+      loadMessages();
+    }
+    setShowSettings(false);
+  };
+
+  // ----- Delete entire chat -----
+  const deleteChat = async () => {
+    if (!user || !id) return;
+    if (!confirm('Delete this entire chat? All messages will be permanently removed.')) return;
+    const chatId = getChatId(user.id, id as string);
+    const data = await fetchData();
+    const chats = data.chats || {};
+    if (chats[chatId]) {
+      delete chats[chatId];
+      await saveData({ ...data, chats });
+      router.push('/chat');
+    }
+    setShowSettings(false);
   };
 
   // ----- Send message -----
@@ -185,7 +228,7 @@ export default function ChatRoom() {
     }
   };
 
-  // ----- Text‑to‑speech with pitch -----
+  // ----- Text‑to‑speech -----
   const speakText = (text: string) => {
     if (!speechSynth.current || !voiceEnabled) return;
     const utterance = new SpeechSynthesisUtterance(text);
@@ -229,51 +272,49 @@ export default function ChatRoom() {
     >
       <div className={`absolute inset-0 ${background ? 'bg-black/60' : 'bg-black'}`} />
       <div className="relative z-10 flex flex-col h-full">
-        {/* Header – clickable for AI */}
-        <div className="flex items-center gap-3 p-3 bg-black/50 backdrop-blur-sm">
-          <button onClick={() => window.history.back()} className="text-white hover:text-gray-300">
-            <FaArrowLeft size={20} />
-          </button>
-          <div
-            onClick={goToAIProfile}
-            className={`flex items-center gap-3 flex-1 ${isAI ? 'cursor-pointer hover:opacity-80' : ''}`}
-          >
-            {recipient.photoURL && (
-              <Image src={recipient.photoURL} alt="Avatar" width={40} height={40} className="w-10 h-10 rounded-full object-cover border-2 border-white" />
-            )}
-            <div>
-              <p className="text-white font-bold">{recipient.displayName}</p>
-              <p className="text-gray-300 text-xs">
-                {isAI ? 'AI Assistant' : `@${recipient.username}`}
-                {isOfficial && <span className="ml-1 text-blue-400">✓ Verified</span>}
-                {recipient.isCustom && <span className="ml-1 text-green-400">Custom</span>}
-              </p>
+        {/* Header – back, avatar, name, speaker, settings */}
+        <div className="flex items-center justify-between p-3 bg-black/50 backdrop-blur-sm">
+          <div className="flex items-center gap-3">
+            <button onClick={() => window.history.back()} className="text-white hover:text-gray-300">
+              <FaArrowLeft size={20} />
+            </button>
+            <div
+              onClick={goToAIProfile}
+              className={`flex items-center gap-3 ${isAI ? 'cursor-pointer hover:opacity-80' : ''}`}
+            >
+              {recipient.photoURL && (
+                <Image src={recipient.photoURL} alt="Avatar" width={40} height={40} className="w-10 h-10 rounded-full object-cover border-2 border-white" />
+              )}
+              <div>
+                <p className="text-white font-bold">{recipient.displayName}</p>
+                <p className="text-gray-300 text-xs">
+                  {isAI ? 'AI Assistant' : `@${recipient.username}`}
+                  {isOfficial && <span className="ml-1 text-blue-400">✓ Verified</span>}
+                  {recipient.isCustom && <span className="ml-1 text-green-400">Custom</span>}
+                </p>
+              </div>
             </div>
           </div>
-          {isAI && (
+          <div className="flex items-center gap-3">
             <button onClick={toggleVoice} className="text-white hover:text-blue-400">
               {voiceEnabled ? <FaMicrophone size={20} /> : <FaMicrophoneSlash size={20} />}
             </button>
-          )}
+            <button onClick={() => setShowSettings(true)} className="text-white hover:text-gray-300">
+              <FaCog size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.map((m) => {
             const isOwn = m.senderId === user?.id;
             const isEditing = editingMessageId === m.id;
             return (
-              <div
-                key={m.id}
-                className={`flex items-start gap-2 ${isOwn ? 'justify-end' : 'justify-start'}`}
-              >
-                {!isOwn && recipient.photoURL && (
-                  <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
-                    <Image src={recipient.photoURL} alt="Avatar" width={32} height={32} className="w-full h-full object-cover" />
-                  </div>
-                )}
+              <div key={m.id} className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
+                {/* Message bubble */}
                 <div
-                  className={`p-2 rounded max-w-[70%] ${
+                  className={`p-3 rounded max-w-[75%] ${
                     isOwn ? 'bg-blue-600 text-white' : 'bg-gray-700 text-white'
                   }`}
                 >
@@ -286,10 +327,10 @@ export default function ChatRoom() {
                         autoFocus
                       />
                       <button onClick={saveEditMessage} className="text-green-400 hover:text-green-300">
-                        <FaCheck size={16} />
+                        <FaCheck size={18} />
                       </button>
                       <button onClick={() => setEditingMessageId(null)} className="text-red-400 hover:text-red-300">
-                        <FaTimes size={16} />
+                        <FaTimes size={18} />
                       </button>
                     </div>
                   ) : (
@@ -299,24 +340,35 @@ export default function ChatRoom() {
                     </>
                   )}
                 </div>
-                <div className="flex flex-col items-center gap-1">
-                  {isOwn && (
+
+                {/* Action buttons below the message */}
+                <div className="flex items-center gap-3 mt-1">
+                  {isOwn && !isEditing && (
                     <>
                       <button
                         onClick={() => startEditMessage(m)}
-                        className="text-gray-400 hover:text-blue-400 text-xs"
+                        className="text-gray-400 hover:text-blue-400 text-sm"
                         title="Edit message"
                       >
-                        <FaEdit size={12} />
+                        <FaEdit size={16} />
                       </button>
                       <button
                         onClick={() => deleteMessage(m.id)}
-                        className="text-gray-400 hover:text-red-400 text-xs"
+                        className="text-gray-400 hover:text-red-400 text-sm"
                         title="Delete message"
                       >
-                        <FaTrash size={12} />
+                        <FaTrash size={16} />
                       </button>
                     </>
+                  )}
+                  {!isOwn && (
+                    <button
+                      onClick={() => deleteMessage(m.id)}
+                      className="text-gray-400 hover:text-red-400 text-sm"
+                      title="Delete message"
+                    >
+                      <FaTrash size={16} />
+                    </button>
                   )}
                 </div>
               </div>
@@ -338,7 +390,53 @@ export default function ChatRoom() {
             <FaPaperPlane />
           </button>
         </div>
+
+        {/* Settings Modal */}
+        {showSettings && (
+          <div className="absolute inset-0 bg-black/80 z-50 flex items-center justify-center">
+            <div className="bg-gray-800 rounded-2xl p-6 max-w-sm w-full">
+              <h2 className="text-white text-xl font-bold mb-4">Chat Settings</h2>
+              <div className="space-y-3">
+                <button
+                  onClick={resetChat}
+                  className="w-full flex items-center gap-3 bg-gray-700 hover:bg-gray-600 text-white p-3 rounded-xl transition"
+                >
+                  <FaEraser size={18} />
+                  <span>Reset Chat (clear all messages)</span>
+                </button>
+                <button
+                  onClick={deleteChat}
+                  className="w-full flex items-center gap-3 bg-red-700 hover:bg-red-600 text-white p-3 rounded-xl transition"
+                >
+                  <FaFolderMinus size={18} />
+                  <span>Delete Entire Chat</span>
+                </button>
+                <hr className="border-gray-600" />
+                <div className="flex justify-between items-center">
+                  <span className="text-white">Voice Output</span>
+                  <button
+                    onClick={() => {
+                      setVoiceEnabled(!voiceEnabled);
+                      if (voiceEnabled) speechSynth.current?.cancel();
+                    }}
+                    className={`px-4 py-1 rounded-full text-sm ${
+                      voiceEnabled ? 'bg-blue-600' : 'bg-gray-600'
+                    } text-white`}
+                  >
+                    {voiceEnabled ? 'On' : 'Off'}
+                  </button>
+                </div>
+                <button
+                  onClick={() => setShowSettings(false)}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-xl mt-2 transition"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
-            }
+    }
