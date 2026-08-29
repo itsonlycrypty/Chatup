@@ -15,7 +15,9 @@ export const fetchData = async () => {
       chats: record.chats || {},
       shorts: record.shorts || [],
       customAIs: record.customAIs || [],
-      groups: record.groups || [], // Added for group chats
+      groups: record.groups || [],
+      channels: record.channels || [],
+      groupInvites: record.groupInvites || [],
     };
   } catch (e) {
     console.error('Fetch error:', e);
@@ -27,6 +29,8 @@ export const fetchData = async () => {
       shorts: [],
       customAIs: [],
       groups: [],
+      channels: [],
+      groupInvites: [],
     };
   }
 };
