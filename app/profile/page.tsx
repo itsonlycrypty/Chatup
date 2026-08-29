@@ -19,7 +19,7 @@ import { useRouter } from 'next/navigation';
 import FloatingPlusButton from '@/components/FloatingPlusButton';
 import { fetchData } from '@/lib/db';
 
-// ----- Types for settings -----
+// ----- Types for settings (extended) -----
 type SettingsKeys =
   | 'darkMode'
   | 'language'
@@ -45,7 +45,15 @@ type SettingsKeys =
   | 'storyMute'
   | 'notificationPreview'
   | 'callNotification'
-  | 'groupNotification';
+  | 'groupNotification'
+  // New settings
+  | 'saveToGallery'
+  | 'videoAutoplay'
+  | 'highQualityUploads'
+  | 'showOnlineStatus'
+  | 'readReceipts'
+  | 'typingIndicators'
+  | 'privacyMode2';
 
 type SettingsType = {
   [K in SettingsKeys]: K extends
@@ -87,7 +95,7 @@ export default function Profile() {
   const [showSettings, setShowSettings] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // ---- Settings state ----
+  // ---- Settings state (extended) ----
   const [settings, setSettings] = useState<SettingsType>({
     darkMode: false,
     language: 'English',
@@ -114,6 +122,14 @@ export default function Profile() {
     notificationPreview: 'Name & Message',
     callNotification: 'Ring & Vibrate',
     groupNotification: 'All Messages',
+    // New settings
+    saveToGallery: true,
+    videoAutoplay: true,
+    highQualityUploads: false,
+    showOnlineStatus: true,
+    readReceipts: true,
+    typingIndicators: true,
+    privacyMode2: false,
   });
 
   // ---- Load dark mode from localStorage ----
@@ -135,6 +151,7 @@ export default function Profile() {
         }
         return { ...prev, [key]: !value };
       }
+      // For string values, we handle via select onChange
       return prev;
     });
   };
@@ -155,10 +172,9 @@ export default function Profile() {
       user.email === 'wmax8808@gmail.com';
 
     if (isCrypty) {
-      // Hardcode: Following = 0, Followers = 4M, Likes = 19M
-      setFollowing([]); // shows 0
-      setFollowers(Array(4000000).fill('dummy')); // 4M
-      setTotalLikes(19000000); // 19M
+      setFollowing([]);
+      setFollowers(Array(4000000).fill('dummy'));
+      setTotalLikes(19000000);
     } else {
       setFollowers(user.followers || []);
       setFollowing(user.following || []);
@@ -501,7 +517,7 @@ export default function Profile() {
         <FloatingPlusButton />
       </div>
 
-      {/* Settings Modal */}
+      {/* Settings Modal (Full‑screen) */}
       {showSettings && (
         <div className="fixed inset-0 bg-black z-50 flex flex-col">
           <div className="flex items-center p-4 bg-gray-900 border-b border-gray-700">
@@ -514,6 +530,7 @@ export default function Profile() {
             <h2 className="text-white text-xl font-bold">Settings</h2>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {/* Dark Mode */}
             <div className="flex justify-between items-center border-b border-gray-700 pb-2">
               <span className="text-white">Dark Mode</span>
               <button
@@ -525,6 +542,7 @@ export default function Profile() {
                 {settings.darkMode ? 'On' : 'Off'}
               </button>
             </div>
+            {/* Language */}
             <div className="flex justify-between items-center border-b border-gray-700 pb-2">
               <span className="text-white">Language</span>
               <select
@@ -542,6 +560,7 @@ export default function Profile() {
                 <option>Japanese</option>
               </select>
             </div>
+            {/* Notification Sounds */}
             <div className="flex justify-between items-center border-b border-gray-700 pb-2">
               <span className="text-white">Notification Sounds</span>
               <button
@@ -553,6 +572,7 @@ export default function Profile() {
                 {settings.notificationSounds ? 'On' : 'Off'}
               </button>
             </div>
+            {/* AI Voice */}
             <div className="flex justify-between items-center border-b border-gray-700 pb-2">
               <span className="text-white">AI Voice</span>
               <button
@@ -564,6 +584,7 @@ export default function Profile() {
                 {settings.aiVoice ? 'Enable' : 'Disable'}
               </button>
             </div>
+            {/* Auto‑Play Videos */}
             <div className="flex justify-between items-center border-b border-gray-700 pb-2">
               <span className="text-white">Auto‑Play Videos</span>
               <button
@@ -575,7 +596,355 @@ export default function Profile() {
                 {settings.autoPlayVideos ? 'On' : 'Off'}
               </button>
             </div>
-            {/* Add more settings as needed */}
+            {/* Auto‑Save Chats */}
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Auto‑Save Chats</span>
+              <button
+                onClick={() => toggleSetting('autoSaveChats')}
+                className={`px-4 py-1 rounded-full text-sm ${
+                  settings.autoSaveChats ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
+                }`}
+              >
+                {settings.autoSaveChats ? 'On' : 'Off'}
+              </button>
+            </div>
+            {/* Show Typing Indicator */}
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Show Typing Indicator</span>
+              <button
+                onClick={() => toggleSetting('showTypingIndicator')}
+                className={`px-4 py-1 rounded-full text-sm ${
+                  settings.showTypingIndicator ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
+                }`}
+              >
+                {settings.showTypingIndicator ? 'On' : 'Off'}
+              </button>
+            </div>
+            {/* Message Read Receipts */}
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Message Read Receipts</span>
+              <button
+                onClick={() => toggleSetting('messageReadReceipts')}
+                className={`px-4 py-1 rounded-full text-sm ${
+                  settings.messageReadReceipts ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
+                }`}
+              >
+                {settings.messageReadReceipts ? 'On' : 'Off'}
+              </button>
+            </div>
+            {/* Media Auto‑Download */}
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Media Auto‑Download</span>
+              <button
+                onClick={() => toggleSetting('mediaAutoDownload')}
+                className={`px-4 py-1 rounded-full text-sm ${
+                  settings.mediaAutoDownload ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
+                }`}
+              >
+                {settings.mediaAutoDownload ? 'On' : 'Off'}
+              </button>
+            </div>
+            {/* Privacy Mode */}
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Privacy Mode</span>
+              <button
+                onClick={() => toggleSetting('privacyMode')}
+                className={`px-4 py-1 rounded-full text-sm ${
+                  settings.privacyMode ? 'bg-red-600 text-white' : 'bg-gray-600 text-white'
+                }`}
+              >
+                {settings.privacyMode ? 'On' : 'Off'}
+              </button>
+            </div>
+            {/* Two‑Factor Auth */}
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Two‑Factor Auth</span>
+              <button
+                onClick={() => toggleSetting('twoFactorAuth')}
+                className={`px-4 py-1 rounded-full text-sm ${
+                  settings.twoFactorAuth ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
+                }`}
+              >
+                {settings.twoFactorAuth ? 'On' : 'Off'}
+              </button>
+            </div>
+            {/* Biometric Login */}
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Biometric Login</span>
+              <button
+                onClick={() => toggleSetting('biometricLogin')}
+                className={`px-4 py-1 rounded-full text-sm ${
+                  settings.biometricLogin ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
+                }`}
+              >
+                {settings.biometricLogin ? 'On' : 'Off'}
+              </button>
+            </div>
+            {/* Screen Lock */}
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Screen Lock</span>
+              <button
+                onClick={() => toggleSetting('screenLock')}
+                className={`px-4 py-1 rounded-full text-sm ${
+                  settings.screenLock ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
+                }`}
+              >
+                {settings.screenLock ? 'On' : 'Off'}
+              </button>
+            </div>
+            {/* App Theme */}
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">App Theme</span>
+              <select
+                className="bg-gray-700 text-white rounded p-1"
+                value={settings.appTheme}
+                onChange={(e) =>
+                  setSettings({ ...settings, appTheme: e.target.value })
+                }
+              >
+                <option>Dark</option>
+                <option>Light</option>
+                <option>System</option>
+              </select>
+            </div>
+            {/* Text Size */}
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Text Size</span>
+              <select
+                className="bg-gray-700 text-white rounded p-1"
+                value={settings.textSize}
+                onChange={(e) =>
+                  setSettings({ ...settings, textSize: e.target.value })
+                }
+              >
+                <option>Small</option>
+                <option>Medium</option>
+                <option>Large</option>
+              </select>
+            </div>
+            {/* Chat Bubble Style */}
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Chat Bubble Style</span>
+              <select
+                className="bg-gray-700 text-white rounded p-1"
+                value={settings.chatBubbleStyle}
+                onChange={(e) =>
+                  setSettings({ ...settings, chatBubbleStyle: e.target.value })
+                }
+              >
+                <option>Rounded</option>
+                <option>Square</option>
+                <option>Sharp</option>
+              </select>
+            </div>
+            {/* Send on Enter */}
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Send on Enter</span>
+              <button
+                onClick={() => toggleSetting('sendOnEnter')}
+                className={`px-4 py-1 rounded-full text-sm ${
+                  settings.sendOnEnter ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
+                }`}
+              >
+                {settings.sendOnEnter ? 'On' : 'Off'}
+              </button>
+            </div>
+            {/* Offline Mode */}
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Offline Mode</span>
+              <button
+                onClick={() => toggleSetting('offlineMode')}
+                className={`px-4 py-1 rounded-full text-sm ${
+                  settings.offlineMode ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
+                }`}
+              >
+                {settings.offlineMode ? 'On' : 'Off'}
+              </button>
+            </div>
+            {/* Data Saver */}
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Data Saver</span>
+              <button
+                onClick={() => toggleSetting('dataSaver')}
+                className={`px-4 py-1 rounded-full text-sm ${
+                  settings.dataSaver ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
+                }`}
+              >
+                {settings.dataSaver ? 'On' : 'Off'}
+              </button>
+            </div>
+            {/* High Quality Media */}
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">High Quality Media</span>
+              <button
+                onClick={() => toggleSetting('highQualityMedia')}
+                className={`px-4 py-1 rounded-full text-sm ${
+                  settings.highQualityMedia ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
+                }`}
+              >
+                {settings.highQualityMedia ? 'On' : 'Off'}
+              </button>
+            </div>
+            {/* Story Auto‑Play */}
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Story Auto‑Play</span>
+              <button
+                onClick={() => toggleSetting('storyAutoPlay')}
+                className={`px-4 py-1 rounded-full text-sm ${
+                  settings.storyAutoPlay ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
+                }`}
+              >
+                {settings.storyAutoPlay ? 'On' : 'Off'}
+              </button>
+            </div>
+            {/* Story Mute */}
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Story Mute</span>
+              <button
+                onClick={() => toggleSetting('storyMute')}
+                className={`px-4 py-1 rounded-full text-sm ${
+                  settings.storyMute ? 'bg-red-600 text-white' : 'bg-gray-600 text-white'
+                }`}
+              >
+                {settings.storyMute ? 'Muted' : 'Unmuted'}
+              </button>
+            </div>
+            {/* Notification Preview */}
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Notification Preview</span>
+              <select
+                className="bg-gray-700 text-white rounded p-1"
+                value={settings.notificationPreview}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    notificationPreview: e.target.value,
+                  })
+                }
+              >
+                <option>Name & Message</option>
+                <option>Name Only</option>
+                <option>None</option>
+              </select>
+            </div>
+            {/* Call Notification */}
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Call Notification</span>
+              <select
+                className="bg-gray-700 text-white rounded p-1"
+                value={settings.callNotification}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    callNotification: e.target.value,
+                  })
+                }
+              >
+                <option>Ring & Vibrate</option>
+                <option>Ring Only</option>
+                <option>Vibrate Only</option>
+                <option>Silent</option>
+              </select>
+            </div>
+            {/* Group Notification */}
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Group Notification</span>
+              <select
+                className="bg-gray-700 text-white rounded p-1"
+                value={settings.groupNotification}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    groupNotification: e.target.value,
+                  })
+                }
+              >
+                <option>All Messages</option>
+                <option>Mentions Only</option>
+                <option>None</option>
+              </select>
+            </div>
+
+            {/* === NEW SETTINGS === */}
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Save to Gallery</span>
+              <button
+                onClick={() => toggleSetting('saveToGallery')}
+                className={`px-4 py-1 rounded-full text-sm ${
+                  settings.saveToGallery ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
+                }`}
+              >
+                {settings.saveToGallery ? 'On' : 'Off'}
+              </button>
+            </div>
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Video Autoplay</span>
+              <button
+                onClick={() => toggleSetting('videoAutoplay')}
+                className={`px-4 py-1 rounded-full text-sm ${
+                  settings.videoAutoplay ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
+                }`}
+              >
+                {settings.videoAutoplay ? 'On' : 'Off'}
+              </button>
+            </div>
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">High Quality Uploads</span>
+              <button
+                onClick={() => toggleSetting('highQualityUploads')}
+                className={`px-4 py-1 rounded-full text-sm ${
+                  settings.highQualityUploads ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
+                }`}
+              >
+                {settings.highQualityUploads ? 'On' : 'Off'}
+              </button>
+            </div>
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Show Online Status</span>
+              <button
+                onClick={() => toggleSetting('showOnlineStatus')}
+                className={`px-4 py-1 rounded-full text-sm ${
+                  settings.showOnlineStatus ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
+                }`}
+              >
+                {settings.showOnlineStatus ? 'On' : 'Off'}
+              </button>
+            </div>
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Read Receipts</span>
+              <button
+                onClick={() => toggleSetting('readReceipts')}
+                className={`px-4 py-1 rounded-full text-sm ${
+                  settings.readReceipts ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
+                }`}
+              >
+                {settings.readReceipts ? 'On' : 'Off'}
+              </button>
+            </div>
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Typing Indicators</span>
+              <button
+                onClick={() => toggleSetting('typingIndicators')}
+                className={`px-4 py-1 rounded-full text-sm ${
+                  settings.typingIndicators ? 'bg-green-600 text-white' : 'bg-gray-600 text-white'
+                }`}
+              >
+                {settings.typingIndicators ? 'On' : 'Off'}
+              </button>
+            </div>
+            <div className="flex justify-between items-center border-b border-gray-700 pb-2">
+              <span className="text-white">Privacy Mode (Advanced)</span>
+              <button
+                onClick={() => toggleSetting('privacyMode2')}
+                className={`px-4 py-1 rounded-full text-sm ${
+                  settings.privacyMode2 ? 'bg-red-600 text-white' : 'bg-gray-600 text-white'
+                }`}
+              >
+                {settings.privacyMode2 ? 'On' : 'Off'}
+              </button>
+            </div>
+
+            {/* Close button */}
             <button
               onClick={() => setShowSettings(false)}
               className="w-full bg-red-600 text-white py-2 rounded-xl mt-4 hover:bg-red-700 transition"
@@ -587,4 +956,4 @@ export default function Profile() {
       )}
     </>
   );
-}
+  }
