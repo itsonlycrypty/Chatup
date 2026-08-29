@@ -19,6 +19,7 @@ export default function Feed() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
+  const [searchActiveTab, setSearchActiveTab] = useState<'users' | 'videos'>('users'); // ✅ added
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -167,6 +168,7 @@ export default function Feed() {
     setShowSearch(true);
     setSearchQuery('');
     setSearchResults([]);
+    setSearchActiveTab('users');
   };
 
   const renderPost = (p: any) => {
@@ -404,4 +406,4 @@ export default function Feed() {
       )}
     </div>
   );
-      }a
+  }
