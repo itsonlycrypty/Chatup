@@ -7,7 +7,7 @@ export default function BottomNav() {
   const path = usePathname();
   const links = [
     { href: '/feed', icon: FaHome, label: 'Home' },
-    { href: '/gallery', icon: FaImages, label: 'Gallery' },
+    { href: '/posts', icon: FaImages, label: 'Posts' }, // renamed
     { href: '/chat', icon: FaComments, label: 'Chat' },
     { href: '/profile', icon: FaUser, label: 'Profile' },
   ];
@@ -21,4 +21,4 @@ export default function BottomNav() {
       ))}
     </nav>
   );
-    }
+}
