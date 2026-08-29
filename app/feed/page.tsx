@@ -23,13 +23,13 @@ export default function Feed() {
   const [searchVideos, setSearchVideos] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchActiveTab, setSearchActiveTab] = useState<'users' | 'videos'>('users');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const hasFetched = useRef(false);
 
   const loadData = async () => {
     const data = await fetchData();
-    // Only show 'post' type (no shorts)
     const homePosts = (data.posts || []).filter((p: any) => p.type !== 'short');
     const sortedHome = homePosts.sort((a: any, b: any) =>
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
@@ -37,26 +37,35 @@ export default function Feed() {
     setPosts(sortedHome);
   };
 
-  const fetchTrendingAndShorts = async () => {
+  const fetchTrending = async () => {
     if (!YOUTUBE_API_KEY) {
-      console.warn('YouTube API key missing');
+      setError('YouTube API key missing. Please add NEXT_PUBLIC_YOUTUBE_API_KEY.');
+      setLoading(false);
       return;
     }
     setLoading(true);
+    setError(null);
     try {
-      // Fetch only trending videos (no shorts)
       const trendingRes = await fetch(
         `https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&maxResults=20&key=${YOUTUBE_API_KEY}&regionCode=US`
       );
+      if (!trendingRes.ok) {
+        const errorData = await trendingRes.json();
+        throw new Error(errorData.error?.message || 'YouTube API error');
+      }
       const trendingData = await trendingRes.json();
-      if (!trendingRes.ok) throw new Error(trendingData.error?.message || 'Trending fetch failed');
+      if (!trendingData.items || trendingData.items.length === 0) {
+        setError('No trending videos found.');
+        setLoading(false);
+        return;
+      }
 
       const binData = await fetchData();
       let existingPosts = binData.posts || [];
       // Remove old YouTube posts
       existingPosts = existingPosts.filter((p: any) => p.userId !== 'youtube_bot');
 
-      const newTrending = trendingData.items?.map((item: any) => ({
+      const newTrending = trendingData.items.map((item: any) => ({
         id: `yt_${item.id}`,
         text: item.snippet.title,
         media: `https://www.youtube.com/watch?v=${item.id}`,
@@ -65,7 +74,7 @@ export default function Feed() {
         comments: [],
         timestamp: new Date().toISOString(),
         type: 'post',
-      })) || [];
+      }));
 
       const allPosts = [...newTrending, ...existingPosts];
       await saveData({ ...binData, posts: allPosts });
@@ -73,26 +82,33 @@ export default function Feed() {
       console.log(`✅ Refreshed feed: ${newTrending.length} videos`);
     } catch (err: any) {
       console.error('Failed to refresh feed:', err.message);
+      setError(err.message || 'Failed to load videos.');
     }
     setLoading(false);
   };
 
   useEffect(() => {
-    loadData();
-    if (!hasFetched.current) {
-      hasFetched.current = true;
-      fetchTrendingAndShorts();
-    }
-    const interval = setInterval(loadData, 5000);
+    const init = async () => {
+      await loadData();
+      if (!hasFetched.current) {
+        hasFetched.current = true;
+        await fetchTrending();
+      }
+    };
+    init();
+    const interval = setInterval(() => {
+      if (!document.hidden) fetchTrending();
+    }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchTrendingAndShorts();
+    await fetchTrending();
     setRefreshing(false);
   };
 
+  // Like, comment, share, follow, etc. (same as before)
   const like = async (postId: string) => {
     const data = await fetchData();
     const posts = data.posts || [];
@@ -195,7 +211,6 @@ export default function Feed() {
     setSearchActiveTab('users');
   };
 
-  // ----- Instagram‑style post render -----
   const renderPost = (p: any) => {
     const postUser = getUser(p.userId);
     const isFollowingUser = isFollowing(p.userId);
@@ -203,7 +218,6 @@ export default function Feed() {
 
     return (
       <div key={p.id} className="bg-white dark:bg-gray-900 rounded-xl shadow-md mb-6 overflow-hidden">
-        {/* Header: avatar + username + follow button */}
         <div className="flex items-center justify-between p-3">
           <Link href={p.userId === 'youtube_bot' ? '#' : `/profile/${p.userId}`} className="flex items-center gap-3">
             {postUser?.photoURL ? (
@@ -240,7 +254,6 @@ export default function Feed() {
           )}
         </div>
 
-        {/* Media – full width */}
         <div className="w-full bg-black">
           {p.media && p.media.startsWith('data:image') && (
             <Image src={p.media} alt="Post" width={400} height={400} className="w-full h-auto object-cover" />
@@ -253,10 +266,8 @@ export default function Feed() {
           )}
         </div>
 
-        {/* Caption */}
         {p.text && <div className="px-3 py-1 text-sm text-gray-900 dark:text-white">{p.text}</div>}
 
-        {/* Action buttons */}
         <div className="flex items-center gap-6 px-3 py-2 text-gray-600 dark:text-gray-400">
           <button onClick={() => like(p.id)} className="flex items-center gap-1 hover:text-red-500 transition">
             <FaHeart className="text-red-500" /> {p.likes || 0}
@@ -269,7 +280,6 @@ export default function Feed() {
           </button>
         </div>
 
-        {/* Comments preview */}
         {(p.comments?.length || 0) > 0 && (
           <div className="px-3 pb-2 space-y-1">
             {p.comments.slice(-2).map((c: any) => (
@@ -282,7 +292,6 @@ export default function Feed() {
           </div>
         )}
 
-        {/* Comment input */}
         {user && (
           <div className="flex items-center gap-2 p-3 border-t border-gray-200 dark:border-gray-800">
             <input
@@ -319,12 +328,19 @@ export default function Feed() {
         </div>
       </div>
 
-      {/* Feed content */}
       {loading ? (
         <div className="flex items-center justify-center h-[80vh]">
           <div className="text-center">
             <div className="animate-spin h-12 w-12 border-t-4 border-b-4 border-blue-500 rounded-full mx-auto mb-4" />
             <p className="text-gray-500 dark:text-gray-400">Loading videos...</p>
+          </div>
+        </div>
+      ) : error ? (
+        <div className="flex items-center justify-center h-[80vh]">
+          <div className="text-center">
+            <div className="text-red-400 text-5xl mb-4">📹</div>
+            <p className="text-gray-500 dark:text-gray-400 mb-4">{error}</p>
+            <button onClick={fetchTrending} className="bg-blue-600 px-6 py-2 rounded-full text-white">Retry</button>
           </div>
         </div>
       ) : posts.length === 0 ? (
@@ -342,7 +358,7 @@ export default function Feed() {
 
       <FloatingPlusButton />
 
-      {/* Search Modal */}
+      {/* Search Modal (unchanged) */}
       {showSearch && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -478,4 +494,4 @@ export default function Feed() {
       )}
     </div>
   );
-                                       }
+          }
