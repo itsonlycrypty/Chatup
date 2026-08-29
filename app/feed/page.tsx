@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   FaHeart, FaSearch, FaComment, FaPaperPlane, FaUserPlus, FaUserCheck,
-  FaShare, FaVideo, FaTimes, FaSync
+  FaShare, FaTimes, FaSync
 } from 'react-icons/fa';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -10,8 +10,6 @@ import FloatingPlusButton from '@/components/FloatingPlusButton';
 import { useAuth } from '@/context/AuthContext';
 import { fetchData, saveData } from '@/lib/db';
 import VideoEmbed from '@/components/VideoEmbed';
-
-const YOUTUBE_API_KEY = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
 
 export default function Feed() {
   const { user, allUsers, followUser } = useAuth();
@@ -28,6 +26,7 @@ export default function Feed() {
   const [error, setError] = useState<string | null>(null);
   const hasFetched = useRef(false);
 
+  // Load posts from DB
   const loadData = async () => {
     const data = await fetchData();
     const homePosts = (data.posts || []).filter((p: any) => p.type !== 'short');
@@ -37,51 +36,43 @@ export default function Feed() {
     setPosts(sortedHome);
   };
 
-  const fetchTrending = async () => {
-    if (!YOUTUBE_API_KEY) {
-      setError('YouTube API key missing. Please add NEXT_PUBLIC_YOUTUBE_API_KEY.');
-      setLoading(false);
-      return;
-    }
+  // Fetch TikTok trending via our API route
+  const fetchTikTokTrending = async () => {
     setLoading(true);
     setError(null);
     try {
-      const trendingRes = await fetch(
-        `https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&maxResults=20&key=${YOUTUBE_API_KEY}&regionCode=US`
-      );
-      if (!trendingRes.ok) {
-        const errorData = await trendingRes.json();
-        throw new Error(errorData.error?.message || 'YouTube API error');
+      const res = await fetch('/api/tiktok');
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'TikTok API error');
       }
-      const trendingData = await trendingRes.json();
-      if (!trendingData.items || trendingData.items.length === 0) {
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      if (data.data && data.data.length > 0) {
+        const newPosts = data.data.map((item: any) => ({
+          id: `tt_${item.id}`,
+          text: item.title || item.desc || '',
+          media: item.video || item.play || '',
+          userId: 'tiktok_bot',
+          likes: 0,
+          comments: [],
+          timestamp: new Date().toISOString(),
+          type: 'post',
+        }));
+        // Save to DB
+        const binData = await fetchData();
+        let existingPosts = binData.posts || [];
+        // Remove old TikTok posts (to refresh)
+        existingPosts = existingPosts.filter((p: any) => p.userId !== 'tiktok_bot');
+        const allPosts = [...newPosts, ...existingPosts];
+        await saveData({ ...binData, posts: allPosts });
+        await loadData();
+        console.log(`✅ Refreshed feed: ${newPosts.length} TikTok videos`);
+      } else {
         setError('No trending videos found.');
-        setLoading(false);
-        return;
       }
-
-      const binData = await fetchData();
-      let existingPosts = binData.posts || [];
-      // Remove old YouTube posts
-      existingPosts = existingPosts.filter((p: any) => p.userId !== 'youtube_bot');
-
-      const newTrending = trendingData.items.map((item: any) => ({
-        id: `yt_${item.id}`,
-        text: item.snippet.title,
-        media: `https://www.youtube.com/watch?v=${item.id}`,
-        userId: 'youtube_bot',
-        likes: 0,
-        comments: [],
-        timestamp: new Date().toISOString(),
-        type: 'post',
-      }));
-
-      const allPosts = [...newTrending, ...existingPosts];
-      await saveData({ ...binData, posts: allPosts });
-      await loadData();
-      console.log(`✅ Refreshed feed: ${newTrending.length} videos`);
     } catch (err: any) {
-      console.error('Failed to refresh feed:', err.message);
+      console.error('Failed to fetch TikTok:', err.message);
       setError(err.message || 'Failed to load videos.');
     }
     setLoading(false);
@@ -92,23 +83,23 @@ export default function Feed() {
       await loadData();
       if (!hasFetched.current) {
         hasFetched.current = true;
-        await fetchTrending();
+        await fetchTikTokTrending();
       }
     };
     init();
     const interval = setInterval(() => {
-      if (!document.hidden) fetchTrending();
+      if (!document.hidden) fetchTikTokTrending();
     }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchTrending();
+    await fetchTikTokTrending();
     setRefreshing(false);
   };
 
-  // Like, comment, share, follow, etc. (same as before)
+  // Like, comment, share, follow functions (unchanged)
   const like = async (postId: string) => {
     const data = await fetchData();
     const posts = data.posts || [];
@@ -161,25 +152,10 @@ export default function Feed() {
     return user.following?.includes(userId) || false;
   };
 
-  const searchYouTube = async (query: string) => {
-    if (!YOUTUBE_API_KEY) return [];
-    try {
-      const res = await fetch(
-        `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&key=${YOUTUBE_API_KEY}&maxResults=10&type=video`
-      );
-      const data = await res.json();
-      if (data.items) {
-        return data.items.map((item: any) => ({
-          id: item.id.videoId,
-          title: item.snippet.title,
-          description: item.snippet.description,
-          thumbnail: item.snippet.thumbnails.medium.url,
-          url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
-          channel: item.snippet.channelTitle,
-        }));
-      }
-      return [];
-    } catch (e) { return []; }
+  // Search (users + dummy videos)
+  const searchTikTok = async (query: string) => {
+    // For now, just return empty array – we can integrate TikTok search later.
+    return [];
   };
 
   const performSearch = async (query: string) => {
@@ -198,7 +174,7 @@ export default function Feed() {
       u.email?.toLowerCase().includes(query.toLowerCase())
     );
     setSearchResults(filteredUsers);
-    const videos = await searchYouTube(query);
+    const videos = await searchTikTok(query);
     setSearchVideos(videos);
     setSearching(false);
   };
@@ -211,6 +187,7 @@ export default function Feed() {
     setSearchActiveTab('users');
   };
 
+  // Render post (Instagram style)
   const renderPost = (p: any) => {
     const postUser = getUser(p.userId);
     const isFollowingUser = isFollowing(p.userId);
@@ -219,12 +196,12 @@ export default function Feed() {
     return (
       <div key={p.id} className="bg-white dark:bg-gray-900 rounded-xl shadow-md mb-6 overflow-hidden">
         <div className="flex items-center justify-between p-3">
-          <Link href={p.userId === 'youtube_bot' ? '#' : `/profile/${p.userId}`} className="flex items-center gap-3">
+          <Link href={p.userId === 'tiktok_bot' ? '#' : `/profile/${p.userId}`} className="flex items-center gap-3">
             {postUser?.photoURL ? (
               <Image src={postUser.photoURL} alt="Avatar" width={32} height={32} className="w-8 h-8 rounded-full object-cover" />
-            ) : p.userId === 'youtube_bot' ? (
+            ) : p.userId === 'tiktok_bot' ? (
               <div className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center text-white text-xs font-bold">
-                CU
+                TT
               </div>
             ) : (
               <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm">
@@ -233,16 +210,16 @@ export default function Feed() {
             )}
             <div>
               <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                {p.userId === 'youtube_bot' ? 'Chat Up Videos' : (postUser?.displayName || 'Unknown')}
+                {p.userId === 'tiktok_bot' ? 'TikTok Trending' : (postUser?.displayName || 'Unknown')}
                 {postUser?.isAdmin && <span className="ml-1 text-yellow-400 text-xs">⭐</span>}
                 {postUser?.isVerified && <span className="ml-1 text-blue-500 text-xs">✓</span>}
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                {p.userId === 'youtube_bot' ? 'Trending' : `@${postUser?.username || ''}`}
+                {p.userId === 'tiktok_bot' ? 'Trending' : `@${postUser?.username || ''}`}
               </p>
             </div>
           </Link>
-          {user && postUser && postUser.id !== user.id && postUser.id !== 'youtube_bot' && (
+          {user && postUser && postUser.id !== user.id && postUser.id !== 'tiktok_bot' && (
             <button
               onClick={() => followUser(postUser.id)}
               className={`text-xs px-3 py-1 rounded-full transition ${
@@ -340,7 +317,7 @@ export default function Feed() {
           <div className="text-center">
             <div className="text-red-400 text-5xl mb-4">📹</div>
             <p className="text-gray-500 dark:text-gray-400 mb-4">{error}</p>
-            <button onClick={fetchTrending} className="bg-blue-600 px-6 py-2 rounded-full text-white">Retry</button>
+            <button onClick={fetchTikTokTrending} className="bg-blue-600 px-6 py-2 rounded-full text-white">Retry</button>
           </div>
         </div>
       ) : posts.length === 0 ? (
@@ -373,7 +350,7 @@ export default function Feed() {
               <FaSearch className="absolute left-3 top-3 text-gray-400 dark:text-gray-500" />
               <input
                 type="text"
-                placeholder="Search users or videos..."
+                placeholder="Search users..."
                 className="w-full bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white p-3 pl-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={searchQuery}
                 onChange={(e) => performSearch(e.target.value)}
@@ -442,7 +419,7 @@ export default function Feed() {
                   searchActiveTab === 'videos' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                 }`}
               >
-                YouTube
+                Videos
               </button>
             </div>
 
@@ -471,7 +448,7 @@ export default function Feed() {
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {searchVideos.length === 0 && searchQuery ? (
-                  <p className="text-gray-500 dark:text-gray-400 text-center">No YouTube videos found</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-center">No videos found</p>
                 ) : searchVideos.map((v) => (
                   <div
                     key={v.id}
@@ -494,4 +471,4 @@ export default function Feed() {
       )}
     </div>
   );
-          }
+        }
