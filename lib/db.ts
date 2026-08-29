@@ -15,10 +15,19 @@ export const fetchData = async () => {
       chats: record.chats || {},
       shorts: record.shorts || [],
       customAIs: record.customAIs || [],
+      groups: record.groups || [], // Added for group chats
     };
   } catch (e) {
     console.error('Fetch error:', e);
-    return { users: [], posts: [], stories: [], chats: {}, shorts: [], customAIs: [] };
+    return {
+      users: [],
+      posts: [],
+      stories: [],
+      chats: {},
+      shorts: [],
+      customAIs: [],
+      groups: [],
+    };
   }
 };
 
