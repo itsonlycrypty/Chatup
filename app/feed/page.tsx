@@ -73,7 +73,6 @@ export default function Feed() {
     setLoading(false);
   };
 
-  // Fetch on mount, refresh on tab visibility change, and on refresh button
   useEffect(() => {
     const init = async () => {
       await loadData();
@@ -84,7 +83,6 @@ export default function Feed() {
     };
     init();
 
-    // Refresh when user returns to tab
     const handleVisibilityChange = () => {
       if (!document.hidden) {
         fetchVideos();
@@ -108,9 +106,211 @@ export default function Feed() {
     setRefreshing(false);
   };
 
-  // Rest of the functions (like, addComment, deleteComment, sharePost, getUser, isFollowing, performSearch, openSearch) remain the same as the previous version
-  // ... (keep all the existing functions) ...
-  // I'll omit them for brevity but they are unchanged.
+  const like = async (postId: string) => {
+    const data = await fetchData();
+    const posts = data.posts || [];
+    const idx = posts.findIndex((p: any) => p.id === postId);
+    if (idx === -1) return;
+    posts[idx].likes = (posts[idx].likes || 0) + 1;
+    await saveData({ ...data, posts });
+    loadData();
+  };
+
+  const addComment = async (postId: string) => {
+    const text = commentText[postId]?.trim();
+    if (!text || !user) return;
+    const data = await fetchData();
+    const posts = data.posts || [];
+    const idx = posts.findIndex((p: any) => p.id === postId);
+    if (idx === -1) return;
+    if (!posts[idx].comments) posts[idx].comments = [];
+    posts[idx].comments.push({
+      id: Date.now().toString(),
+      userId: user.id,
+      username: user.username,
+      displayName: user.displayName,
+      text,
+      timestamp: new Date().toISOString(),
+    });
+    await saveData({ ...data, posts });
+    setCommentText({ ...commentText, [postId]: '' });
+    loadData();
+  };
+
+  const deleteComment = async (postId: string, commentId: string) => {
+    if (!user) return;
+    const data = await fetchData();
+    const posts = data.posts || [];
+    const idx = posts.findIndex((p: any) => p.id === postId);
+    if (idx === -1) return;
+    const post = posts[idx];
+    if (!post.comments) return;
+    const commentIdx = post.comments.findIndex((c: any) => c.id === commentId);
+    if (commentIdx === -1) return;
+    if (post.comments[commentIdx].userId !== user.id) return;
+    post.comments.splice(commentIdx, 1);
+    await saveData({ ...data, posts });
+    loadData();
+  };
+
+  const sharePost = async (post: any) => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: post.text || 'Check out this post on Chat Up',
+          text: post.text || 'Check out this post on Chat Up',
+          url: post.media || window.location.href,
+        });
+      } catch (e) { /* user cancelled */ }
+    } else {
+      await navigator.clipboard?.writeText(`${post.text || 'Check out this post'} - ${post.media || ''}`);
+      alert('Link copied to clipboard!');
+    }
+  };
+
+  const getUser = (userId: string) => allUsers.find((u: any) => u.id === userId);
+  const isFollowing = (userId: string) => {
+    if (!user) return false;
+    return user.following?.includes(userId) || false;
+  };
+
+  const performSearch = async (query: string) => {
+    setSearchQuery(query);
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    const data = await fetchData();
+    const users = data.users || [];
+    const filteredUsers = users.filter((u: any) =>
+      u.username?.toLowerCase().includes(query.toLowerCase()) ||
+      u.displayName?.toLowerCase().includes(query.toLowerCase()) ||
+      u.email?.toLowerCase().includes(query.toLowerCase())
+    );
+    setSearchResults(filteredUsers);
+    setSearching(false);
+  };
+
+  const openSearch = () => {
+    setShowSearch(true);
+    setSearchQuery('');
+    setSearchResults([]);
+  };
+
+  const renderPost = (p: any) => {
+    const postUser = getUser(p.userId);
+    const isFollowingUser = isFollowing(p.userId);
+
+    return (
+      <div key={p.id} className="bg-white dark:bg-gray-900 rounded-xl shadow-md mb-6 overflow-hidden">
+        <div className="flex items-center justify-between p-3">
+          <Link href={p.userId === 'youtube_bot' ? '#' : `/profile/${p.userId}`} className="flex items-center gap-3">
+            {postUser?.photoURL ? (
+              <Image src={postUser.photoURL} alt="Avatar" width={32} height={32} className="w-8 h-8 rounded-full object-cover" />
+            ) : p.userId === 'youtube_bot' ? (
+              <div className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center text-white text-xs font-bold">
+                CU
+              </div>
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm">
+                {postUser?.displayName?.[0]?.toUpperCase() || 'U'}
+              </div>
+            )}
+            <div>
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                {p.userId === 'youtube_bot' ? 'Chat Up Shorts' : (postUser?.displayName || 'Unknown')}
+                {postUser?.isAdmin && <span className="ml-1 text-yellow-400 text-xs">⭐</span>}
+                {postUser?.isVerified && <span className="ml-1 text-blue-500 text-xs">✓</span>}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {p.userId === 'youtube_bot' ? 'Trending' : `@${postUser?.username || ''}`}
+              </p>
+            </div>
+          </Link>
+          {user && postUser && postUser.id !== user.id && postUser.id !== 'youtube_bot' && (
+            <button
+              onClick={() => followUser(postUser.id)}
+              className={`text-xs px-3 py-1 rounded-full transition ${
+                isFollowingUser ? 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300' : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
+            >
+              {isFollowingUser ? 'Following' : 'Follow'}
+            </button>
+          )}
+        </div>
+
+        <div className="w-full bg-black">
+          {p.media && p.media.startsWith('data:image') && (
+            <Image src={p.media} alt="Post" width={400} height={400} className="w-full h-auto object-cover" />
+          )}
+          {p.media && p.media.startsWith('data:video') && (
+            <video src={p.media} controls className="w-full h-auto object-cover" />
+          )}
+          {p.media && p.media.startsWith('http') && !p.media.startsWith('data:') && (
+            <VideoEmbed url={p.media} />
+          )}
+        </div>
+
+        {p.text && <div className="px-3 py-1 text-sm text-gray-900 dark:text-white">{p.text}</div>}
+
+        <div className="flex items-center gap-6 px-3 py-2 text-gray-600 dark:text-gray-400">
+          <button onClick={() => like(p.id)} className="flex items-center gap-1 hover:text-red-500 transition">
+            <FaHeart className="text-red-500" /> {p.likes || 0}
+          </button>
+          <span className="flex items-center gap-1">
+            <FaComment /> {(p.comments?.length || 0)}
+          </span>
+          <button onClick={() => sharePost(p)} className="flex items-center gap-1 hover:text-blue-500 transition">
+            <FaShare />
+          </button>
+        </div>
+
+        {(p.comments?.length || 0) > 0 && (
+          <div className="px-3 pb-2 space-y-1">
+            {p.comments.slice(-3).map((c: any) => {
+              const isOwnComment = user && c.userId === user.id;
+              return (
+                <div key={c.id} className="flex items-center justify-between text-sm">
+                  <div>
+                    <span className="text-blue-500 font-semibold">@{c.username}</span>
+                    <span className="text-gray-700 dark:text-gray-300 ml-2">{c.text}</span>
+                  </div>
+                  {isOwnComment && (
+                    <button
+                      onClick={() => deleteComment(p.id, c.id)}
+                      className="text-gray-400 hover:text-red-500 transition"
+                      title="Delete comment"
+                    >
+                      <FaTrash size={12} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            {p.comments.length > 3 && (
+              <p className="text-gray-500 dark:text-gray-400 text-xs">+{p.comments.length - 3} more</p>
+            )}
+          </div>
+        )}
+
+        {user && (
+          <div className="flex items-center gap-2 p-3 border-t border-gray-200 dark:border-gray-800">
+            <input
+              className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white p-2 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Add a comment..."
+              value={commentText[p.id] || ''}
+              onChange={(e) => setCommentText({ ...commentText, [p.id]: e.target.value })}
+              onKeyDown={(e) => e.key === 'Enter' && addComment(p.id)}
+            />
+            <button onClick={() => addComment(p.id)} className="text-blue-500 hover:text-blue-400">
+              <FaPaperPlane />
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-black pb-24">
@@ -130,7 +330,35 @@ export default function Feed() {
         </div>
       </div>
 
-      {/* ... rest of the feed content (loading, error, posts) ... */}
+      {loading ? (
+        <div className="flex items-center justify-center h-[80vh]">
+          <div className="text-center">
+            <div className="animate-spin h-12 w-12 border-t-4 border-b-4 border-blue-500 rounded-full mx-auto mb-4" />
+            <p className="text-gray-500 dark:text-gray-400">Loading videos...</p>
+          </div>
+        </div>
+      ) : error ? (
+        <div className="flex items-center justify-center h-[80vh]">
+          <div className="text-center">
+            <div className="text-red-400 text-5xl mb-4">📹</div>
+            <p className="text-gray-500 dark:text-gray-400 mb-4">{error}</p>
+            <button onClick={fetchVideos} className="bg-blue-600 px-6 py-2 rounded-full text-white">Retry</button>
+          </div>
+        </div>
+      ) : posts.length === 0 ? (
+        <div className="flex items-center justify-center h-[80vh]">
+          <div className="text-center">
+            <div className="text-gray-400 text-5xl mb-4">📹</div>
+            <p className="text-gray-500 dark:text-gray-400">No posts yet. Tap + to upload or refresh.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="max-w-md mx-auto p-2">
+          {posts.map((p) => renderPost(p))}
+        </div>
+      )}
+
+      <FloatingPlusButton />
 
       {/* Full‑screen Search Modal */}
       {showSearch && (
@@ -186,4 +414,4 @@ export default function Feed() {
       )}
     </div>
   );
-    }
+        }
