@@ -12,7 +12,10 @@ export default function Gallery() {
   useEffect(() => {
     const load = async () => {
       const data = await fetchData();
-      const allPosts = (data.posts || []).filter((p: any) => p.type !== 'short');
+      // Only user-uploaded posts (not from youtube_bot, not shorts)
+      const allPosts = (data.posts || []).filter(
+        (p: any) => p.type !== 'short' && p.userId !== 'youtube_bot'
+      );
       setPosts(allPosts);
       setLoading(false);
     };
@@ -27,7 +30,9 @@ export default function Gallery() {
     <div className="min-h-screen bg-gray-50 dark:bg-black p-4 pb-24">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Gallery</h1>
       {posts.length === 0 ? (
-        <p className="text-gray-500 dark:text-gray-400 text-center py-20">No posts yet.</p>
+        <div className="flex items-center justify-center h-[60vh]">
+          <p className="text-gray-500 dark:text-gray-400 text-xl">No Videos yet</p>
+        </div>
       ) : (
         <div className="grid grid-cols-3 gap-1">
           {posts.map((post) => (
@@ -48,4 +53,4 @@ export default function Gallery() {
       )}
     </div>
   );
-    }
+        }
