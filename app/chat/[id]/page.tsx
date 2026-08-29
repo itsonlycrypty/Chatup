@@ -17,6 +17,9 @@ import {
   FaCog,
   FaEraser,
   FaFolderMinus,
+  FaVolumeUp,
+  FaVolumeMute,
+  FaFont,
 } from 'react-icons/fa';
 
 export default function ChatRoom() {
@@ -34,12 +37,22 @@ export default function ChatRoom() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+  const [temperature, setTemperature] = useState(0.7);
+  const [maxTokens, setMaxTokens] = useState(250);
+  const [responseStyle, setResponseStyle] = useState('concise');
   const bottomRef = useRef<HTMLDivElement>(null);
   const speechSynth = useRef<SpeechSynthesis | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       speechSynth.current = window.speechSynthesis;
+      // Load saved settings from localStorage
+      const savedTemp = localStorage.getItem('ai_temperature');
+      const savedTokens = localStorage.getItem('ai_maxTokens');
+      const savedStyle = localStorage.getItem('ai_responseStyle');
+      if (savedTemp) setTemperature(parseFloat(savedTemp));
+      if (savedTokens) setMaxTokens(parseInt(savedTokens));
+      if (savedStyle) setResponseStyle(savedStyle);
     }
   }, []);
 
@@ -110,6 +123,8 @@ export default function ChatRoom() {
         body: JSON.stringify({
           systemPrompt: systemPrompt,
           userMessage: userMessage,
+          temperature: temperature,
+          maxTokens: maxTokens,
         }),
       });
       if (!res.ok) {
@@ -261,6 +276,14 @@ export default function ChatRoom() {
     }
   };
 
+  // Save settings to localStorage
+  const saveSettings = () => {
+    localStorage.setItem('ai_temperature', String(temperature));
+    localStorage.setItem('ai_maxTokens', String(maxTokens));
+    localStorage.setItem('ai_responseStyle', responseStyle);
+    setShowSettings(false);
+  };
+
   if (!recipient) {
     return <div className="flex items-center justify-center h-screen bg-black text-white">Loading...</div>;
   }
@@ -272,7 +295,7 @@ export default function ChatRoom() {
     >
       <div className={`absolute inset-0 ${background ? 'bg-black/60' : 'bg-black'}`} />
       <div className="relative z-10 flex flex-col h-full">
-        {/* Header – back, avatar, name, speaker, settings */}
+        {/* Header */}
         <div className="flex items-center justify-between p-3 bg-black/50 backdrop-blur-sm">
           <div className="flex items-center gap-3">
             <button onClick={() => window.history.back()} className="text-white hover:text-gray-300">
@@ -297,7 +320,7 @@ export default function ChatRoom() {
           </div>
           <div className="flex items-center gap-3">
             <button onClick={toggleVoice} className="text-white hover:text-blue-400">
-              {voiceEnabled ? <FaMicrophone size={20} /> : <FaMicrophoneSlash size={20} />}
+              {voiceEnabled ? <FaVolumeUp size={20} /> : <FaVolumeMute size={20} />}
             </button>
             <button onClick={() => setShowSettings(true)} className="text-white hover:text-gray-300">
               <FaCog size={20} />
@@ -312,7 +335,6 @@ export default function ChatRoom() {
             const isEditing = editingMessageId === m.id;
             return (
               <div key={m.id} className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
-                {/* Message bubble */}
                 <div
                   className={`p-3 rounded max-w-[75%] ${
                     isOwn ? 'bg-blue-600 text-white' : 'bg-gray-700 text-white'
@@ -340,8 +362,6 @@ export default function ChatRoom() {
                     </>
                   )}
                 </div>
-
-                {/* Action buttons below the message */}
                 <div className="flex items-center gap-3 mt-1">
                   {isOwn && !isEditing && (
                     <>
@@ -391,52 +411,117 @@ export default function ChatRoom() {
           </button>
         </div>
 
-        {/* Settings Modal */}
+        {/* Settings Modal – Full Screen */}
         {showSettings && (
-          <div className="absolute inset-0 bg-black/80 z-50 flex items-center justify-center">
-            <div className="bg-gray-800 rounded-2xl p-6 max-w-sm w-full">
-              <h2 className="text-white text-xl font-bold mb-4">Chat Settings</h2>
+          <div className="absolute inset-0 bg-black z-50 flex flex-col">
+            <div className="flex items-center justify-between p-4 bg-gray-900 border-b border-gray-700">
+              <h2 className="text-white text-xl font-bold">AI Settings</h2>
+              <button onClick={() => setShowSettings(false)} className="text-gray-400 hover:text-white">
+                <FaTimes size={24} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Chat Actions */}
               <div className="space-y-3">
+                <h3 className="text-gray-400 text-sm uppercase tracking-wider">Chat Actions</h3>
                 <button
                   onClick={resetChat}
-                  className="w-full flex items-center gap-3 bg-gray-700 hover:bg-gray-600 text-white p-3 rounded-xl transition"
+                  className="w-full flex items-center gap-3 bg-gray-800 hover:bg-gray-700 text-white p-4 rounded-xl transition"
                 >
                   <FaEraser size={18} />
                   <span>Reset Chat (clear all messages)</span>
                 </button>
                 <button
                   onClick={deleteChat}
-                  className="w-full flex items-center gap-3 bg-red-700 hover:bg-red-600 text-white p-3 rounded-xl transition"
+                  className="w-full flex items-center gap-3 bg-red-800 hover:bg-red-700 text-white p-4 rounded-xl transition"
                 >
                   <FaFolderMinus size={18} />
                   <span>Delete Entire Chat</span>
                 </button>
-                <hr className="border-gray-600" />
-                <div className="flex justify-between items-center">
+              </div>
+
+              <hr className="border-gray-700" />
+
+              {/* Voice Settings */}
+              <div className="space-y-3">
+                <h3 className="text-gray-400 text-sm uppercase tracking-wider">Voice & Audio</h3>
+                <div className="flex justify-between items-center bg-gray-800 p-4 rounded-xl">
                   <span className="text-white">Voice Output</span>
                   <button
                     onClick={() => {
                       setVoiceEnabled(!voiceEnabled);
                       if (voiceEnabled) speechSynth.current?.cancel();
                     }}
-                    className={`px-4 py-1 rounded-full text-sm ${
+                    className={`px-4 py-2 rounded-full text-sm ${
                       voiceEnabled ? 'bg-blue-600' : 'bg-gray-600'
                     } text-white`}
                   >
                     {voiceEnabled ? 'On' : 'Off'}
                   </button>
                 </div>
-                <button
-                  onClick={() => setShowSettings(false)}
-                  className="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-xl mt-2 transition"
-                >
-                  Close
-                </button>
               </div>
+
+              <hr className="border-gray-700" />
+
+              {/* AI Response Settings */}
+              <div className="space-y-4">
+                <h3 className="text-gray-400 text-sm uppercase tracking-wider">AI Response Settings</h3>
+                
+                <div className="bg-gray-800 p-4 rounded-xl">
+                  <label className="text-white block mb-2">Temperature: {temperature.toFixed(1)}</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={temperature}
+                    onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                    className="w-full accent-blue-500"
+                  />
+                  <p className="text-gray-400 text-xs mt-1">Lower = more predictable, Higher = more creative</p>
+                </div>
+
+                <div className="bg-gray-800 p-4 rounded-xl">
+                  <label className="text-white block mb-2">Max Tokens: {maxTokens}</label>
+                  <input
+                    type="range"
+                    min="50"
+                    max="500"
+                    step="25"
+                    value={maxTokens}
+                    onChange={(e) => setMaxTokens(parseInt(e.target.value))}
+                    className="w-full accent-blue-500"
+                  />
+                  <p className="text-gray-400 text-xs mt-1">Controls response length</p>
+                </div>
+
+                <div className="bg-gray-800 p-4 rounded-xl">
+                  <label className="text-white block mb-2">Response Style</label>
+                  <select
+                    value={responseStyle}
+                    onChange={(e) => setResponseStyle(e.target.value)}
+                    className="w-full bg-gray-700 text-white p-2 rounded-lg"
+                  >
+                    <option value="concise">Concise (Short & Direct)</option>
+                    <option value="detailed">Detailed (Explanatory)</option>
+                    <option value="friendly">Friendly (Warm & Chatty)</option>
+                  </select>
+                </div>
+              </div>
+
+              <hr className="border-gray-700" />
+
+              {/* Save & Close */}
+              <button
+                onClick={saveSettings}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold transition"
+              >
+                Save Settings
+              </button>
             </div>
           </div>
         )}
       </div>
     </div>
   );
-    }
+}
