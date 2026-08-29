@@ -15,7 +15,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
         <div className="text-center">
           <div className="animate-spin h-16 w-16 border-t-4 border-b-4 border-blue-500 rounded-full mx-auto mb-6"></div>
           <h1 className="text-3xl font-bold text-[var(--text)]">Chat Up</h1>
-          <p className="text-gray-400 text-sm mt-2">created by <span className="text-blue-400">crypty</span> &amp; <span className="text-purple-400">Mole</span></p>
+          <p className="text-gray-400 text-sm mt-2">created by <span className="text-blue-400">Crypty</span> &amp; assisted by <span className="text-purple-400">Mole</span></p>
         </div>
       </div>
     );
@@ -36,4 +36,4 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </body>
     </html>
   );
-  }
+}
