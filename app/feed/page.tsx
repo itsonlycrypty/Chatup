@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   FaHeart, FaSearch, FaComment, FaPaperPlane, FaUserPlus, FaUserCheck,
-  FaShare, FaTimes, FaSync
+  FaShare, FaTimes, FaSync, FaTrash
 } from 'react-icons/fa';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -19,7 +19,7 @@ export default function Feed() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
-  const [searchActiveTab, setSearchActiveTab] = useState<'users' | 'videos'>('users'); // ✅ added
+  const [searchActiveTab, setSearchActiveTab] = useState<'users' | 'videos'>('users');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -122,6 +122,24 @@ export default function Feed() {
     });
     await saveData({ ...data, posts });
     setCommentText({ ...commentText, [postId]: '' });
+    loadData();
+  };
+
+  // ----- Delete a comment -----
+  const deleteComment = async (postId: string, commentId: string) => {
+    if (!user) return;
+    const data = await fetchData();
+    const posts = data.posts || [];
+    const idx = posts.findIndex((p: any) => p.id === postId);
+    if (idx === -1) return;
+    const post = posts[idx];
+    if (!post.comments) return;
+    const commentIdx = post.comments.findIndex((c: any) => c.id === commentId);
+    if (commentIdx === -1) return;
+    // Only allow deletion if user is the comment author
+    if (post.comments[commentIdx].userId !== user.id) return;
+    post.comments.splice(commentIdx, 1);
+    await saveData({ ...data, posts });
     loadData();
   };
 
@@ -239,15 +257,32 @@ export default function Feed() {
           </button>
         </div>
 
+        {/* Comments section with delete */}
         {(p.comments?.length || 0) > 0 && (
           <div className="px-3 pb-2 space-y-1">
-            {p.comments.slice(-2).map((c: any) => (
-              <div key={c.id} className="text-sm">
-                <span className="text-blue-500 font-semibold">@{c.username}</span>
-                <span className="text-gray-700 dark:text-gray-300 ml-2">{c.text}</span>
-              </div>
-            ))}
-            {p.comments.length > 2 && <p className="text-gray-500 dark:text-gray-400 text-xs">+{p.comments.length - 2} more</p>}
+            {p.comments.slice(-3).map((c: any) => {
+              const isOwnComment = user && c.userId === user.id;
+              return (
+                <div key={c.id} className="flex items-center justify-between text-sm">
+                  <div>
+                    <span className="text-blue-500 font-semibold">@{c.username}</span>
+                    <span className="text-gray-700 dark:text-gray-300 ml-2">{c.text}</span>
+                  </div>
+                  {isOwnComment && (
+                    <button
+                      onClick={() => deleteComment(p.id, c.id)}
+                      className="text-gray-400 hover:text-red-500 transition"
+                      title="Delete comment"
+                    >
+                      <FaTrash size={12} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            {p.comments.length > 3 && (
+              <p className="text-gray-500 dark:text-gray-400 text-xs">+{p.comments.length - 3} more</p>
+            )}
           </div>
         )}
 
@@ -406,4 +441,4 @@ export default function Feed() {
       )}
     </div>
   );
-  }
+          }
