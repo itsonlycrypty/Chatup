@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { fetchData, saveData } from '@/lib/db';
-import { FaArrowLeft } from 'react-icons/fa';
+import { FaArrowLeft, FaImage } from 'react-icons/fa';
 
 export default function CreateAI() {
   const { user } = useAuth();
@@ -12,21 +12,64 @@ export default function CreateAI() {
   const [description, setDescription] = useState('');
   const [speciality, setSpeciality] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
-  const [avatar, setAvatar] = useState('');
-  const [background, setBackground] = useState('');
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [backgroundFile, setBackgroundFile] = useState<File | null>(null);
+  const [backgroundPreview, setBackgroundPreview] = useState<string | null>(null);
   const [isMale, setIsMale] = useState(true);
 
   if (!user) return <div className="p-6 text-white">Please log in to create an AI.</div>;
 
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setAvatarFile(file);
+      const reader = new FileReader();
+      reader.onload = (ev) => setAvatarPreview(ev.target?.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleBackgroundChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setBackgroundFile(file);
+      const reader = new FileReader();
+      reader.onload = (ev) => setBackgroundPreview(ev.target?.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return alert('Name is required');
+
+    // Convert images to base64 if selected
+    let avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=${isMale ? '264653' : 'e76f51'}&color=fff&size=128`;
+    let bgUrl = `https://picsum.photos/seed/${Date.now()}/800/1200`;
+
+    if (avatarFile) {
+      const reader = new FileReader();
+      avatarUrl = await new Promise<string>((resolve) => {
+        reader.onload = (ev) => resolve(ev.target?.result as string);
+        reader.readAsDataURL(avatarFile);
+      });
+    }
+
+    if (backgroundFile) {
+      const reader = new FileReader();
+      bgUrl = await new Promise<string>((resolve) => {
+        reader.onload = (ev) => resolve(ev.target?.result as string);
+        reader.readAsDataURL(backgroundFile);
+      });
+    }
+
     const newAI = {
       id: `custom_${Date.now()}`,
       name: name.trim(),
       username: name.trim().toLowerCase().replace(/\s/g, '_') + '_ai',
-      avatar: avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=${isMale ? '264653' : 'e76f51'}&color=fff&size=128`,
-      background: background || `https://picsum.photos/seed/${Date.now()}/800/1200`,
+      avatar: avatarUrl,
+      background: bgUrl,
       description: description.trim() || 'A custom AI assistant.',
       speciality: speciality.trim() || 'General knowledge',
       voice: { name: isMale ? 'Google US English Male' : 'Google UK English Female', lang: 'en-US' },
@@ -36,6 +79,7 @@ export default function CreateAI() {
       createdBy: user.id,
       systemPrompt: systemPrompt.trim() || 'You are a helpful assistant.',
     };
+
     const data = await fetchData();
     const customAIs = data.customAIs || [];
     customAIs.push(newAI);
@@ -89,24 +133,35 @@ export default function CreateAI() {
             placeholder="e.g., You are a witty assistant who loves dad jokes."
           />
         </div>
+
+        {/* Avatar upload */}
         <div>
-          <label className="text-gray-300 block mb-1">Avatar URL (optional)</label>
-          <input
-            className="w-full bg-gray-800 text-white p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={avatar}
-            onChange={(e) => setAvatar(e.target.value)}
-            placeholder="https://example.com/avatar.png"
-          />
+          <label className="text-gray-300 block mb-1">Avatar Image</label>
+          <div className="flex items-center gap-4">
+            {avatarPreview && (
+              <img src={avatarPreview} alt="Avatar preview" className="w-16 h-16 rounded-full object-cover border-2 border-blue-500" />
+            )}
+            <label className="cursor-pointer bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-xl flex items-center gap-2 transition">
+              <FaImage /> Choose Image
+              <input type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
+            </label>
+          </div>
         </div>
+
+        {/* Background upload */}
         <div>
-          <label className="text-gray-300 block mb-1">Background URL (optional)</label>
-          <input
-            className="w-full bg-gray-800 text-white p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={background}
-            onChange={(e) => setBackground(e.target.value)}
-            placeholder="https://example.com/background.png"
-          />
+          <label className="text-gray-300 block mb-1">Background Image</label>
+          <div className="flex items-center gap-4">
+            {backgroundPreview && (
+              <img src={backgroundPreview} alt="Background preview" className="w-24 h-16 object-cover rounded border-2 border-purple-500" />
+            )}
+            <label className="cursor-pointer bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-xl flex items-center gap-2 transition">
+              <FaImage /> Choose Image
+              <input type="file" accept="image/*" onChange={handleBackgroundChange} className="hidden" />
+            </label>
+          </div>
         </div>
+
         <div className="flex items-center gap-4">
           <label className="text-gray-300">Gender:</label>
           <button
@@ -124,6 +179,7 @@ export default function CreateAI() {
             Female
           </button>
         </div>
+
         <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl transition">
           Create AI
         </button>
