@@ -1,39 +1,31 @@
 import { NextResponse } from 'next/server';
 
-// Your LamaTok key (hardcoded)
-const LAMATOK_KEY = 's700p889eq193fgj63eqa9u1e76bivte';
-
 export async function GET() {
   try {
-    const res = await fetch(
-      'https://api.lamatok.com/v1/search?q=trending&count=20',
-      {
-        headers: {
-          'x-access-key': LAMATOK_KEY,
-          'accept': 'application/json',
-        },
-      }
-    );
+    // TikWM public trending endpoint – no key required
+    const res = await fetch('https://www.tikwm.com/api/trending', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      // 8 second timeout to avoid hanging
+      signal: AbortSignal.timeout(8000),
+    });
 
     if (!res.ok) {
-      const errorText = await res.text();
-      console.error('LamaTok error:', res.status, errorText);
-      return NextResponse.json(
-        { error: `LamaTok error: ${res.status}` },
-        { status: res.status }
-      );
+      throw new Error(`TikWM error: ${res.status}`);
     }
 
     const data = await res.json();
 
-    if (data.items && data.items.length > 0) {
-      const items = data.items.map((item: any) => ({
-        id: `tt_${item.id || Math.random().toString(36)}`,
-        title: item.title || item.description || 'TikTok Video',
-        desc: item.description || '',
-        video: item.video_url || item.url || '',
-        play: item.video_url || item.url || '',
-        cover: item.cover_url || '',
+    if (data.data && data.data.length > 0) {
+      // Map to our expected format
+      const items = data.data.map((item: any) => ({
+        id: `tt_${item.id}`,
+        title: item.title || item.desc || 'TikTok Video',
+        desc: item.desc || '',
+        video: item.video || item.play || '',
+        play: item.play || item.video || '',
+        cover: item.cover || '',
       }));
       return NextResponse.json({ data: items });
     } else {
@@ -43,10 +35,11 @@ export async function GET() {
       );
     }
   } catch (error: any) {
-    console.error('LamaTok fetch error:', error);
+    console.error('TikTok fetch error:', error.message);
+    // No fallback – return a clear error
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch from LamaTok' },
+      { error: 'Failed to fetch TikTok videos. Please refresh.' },
       { status: 500 }
     );
   }
-        }
+}
