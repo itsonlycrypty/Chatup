@@ -15,30 +15,23 @@ async function getAvailableModels(): Promise<string[]> {
     });
     if (!res.ok) throw new Error('Failed to fetch models');
     const data = await res.json();
-    // Exclude whisper, embedding, and any model that might require terms acceptance (e.g., orpheus)
     const models = data.data
       .filter((m: any) => 
         !m.id.includes('whisper') && 
         !m.id.includes('embedding') &&
-        !m.id.includes('orpheus') // skip terms‑acceptance models
+        !m.id.includes('orpheus')
       )
       .map((m: any) => m.id);
     cachedModels = models;
     cacheTime = now;
     return models;
   } catch (e) {
-    console.error('Failed to fetch models, using fallback:', e);
-    // Fallback: prefer non‑Llama, then Llama as last resort
-    return [
-      'mixtral-8x7b-32768',
-      'gemma2-9b-it',
-      'llama-3.1-8b-instant',
-    ];
+    return ['mixtral-8x7b-32768', 'gemma2-9b-it', 'llama-3.1-8b-instant'];
   }
 }
 
 export async function POST(request: Request) {
-  const { systemPrompt, userMessage } = await request.json();
+  const { systemPrompt, userMessage, temperature = 0.7, maxTokens = 250 } = await request.json();
 
   if (!systemPrompt || !userMessage) {
     return NextResponse.json(
@@ -64,35 +57,37 @@ export async function POST(request: Request) {
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userMessage },
           ],
-          max_tokens: 250,
-          temperature: 0.7,
+          max_tokens: maxTokens,
+          temperature: temperature,
         }),
       });
 
       if (!res.ok) {
         const errorText = await res.text();
-        // If the error is "terms acceptance", skip to next model
         if (errorText.includes('terms acceptance')) {
           console.warn(`Model ${model} requires terms acceptance, skipping`);
           continue;
         }
-        // Otherwise, throw to be caught below
         throw new Error(`Groq error ${res.status}: ${errorText}`);
       }
 
       const data = await res.json();
-      const reply = data.choices?.[0]?.message?.content || 'Sorry, I could not generate a response.';
+      let reply = data.choices?.[0]?.message?.content || 'Sorry, I could not generate a response.';
+
+      // ✅ Remove any <think>...</think> tags and the word "think" 
+      reply = reply.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+      // Also remove any leftover "thinking" text
+      reply = reply.replace(/^Thinking:\s*/i, '').replace(/^Here's a thinking process:[\s\S]*?\n/i, '');
+
       return NextResponse.json({ reply });
     } catch (error: any) {
       console.error(`Model ${model} failed:`, error.message);
       lastError = error;
-      // Continue to next model
     }
   }
 
-  // If all models fail, return the last error
   return NextResponse.json(
-    { error: lastError?.message || 'All models failed. Please check your API key or try again later.' },
+    { error: lastError?.message || 'All models failed.' },
     { status: 500 }
   );
-    }
+        }
