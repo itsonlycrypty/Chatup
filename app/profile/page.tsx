@@ -155,10 +155,10 @@ export default function Profile() {
       user.email === 'wmax8808@gmail.com';
 
     if (isCrypty) {
-      // Hardcode 4M followers/following and 19M likes
-      setFollowers(Array(4000000).fill('dummy'));
-      setFollowing(Array(4000000).fill('dummy'));
-      setTotalLikes(19000000);
+      // Hardcode: Following = 0, Followers = 4M, Likes = 19M
+      setFollowing([]); // shows 0
+      setFollowers(Array(4000000).fill('dummy')); // 4M
+      setTotalLikes(19000000); // 19M
     } else {
       setFollowers(user.followers || []);
       setFollowing(user.following || []);
@@ -395,7 +395,7 @@ export default function Profile() {
             <div className="flex gap-6 mt-4 text-center">
               <div>
                 <p className="text-[var(--text)] font-bold">
-                  {isCrypty ? '4M' : following.length}
+                  {isCrypty ? '0' : following.length}
                 </p>
                 <p className="text-gray-400 text-xs">Following</p>
               </div>
@@ -587,4 +587,4 @@ export default function Profile() {
       )}
     </>
   );
-    }
+}
