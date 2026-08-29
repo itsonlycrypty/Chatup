@@ -38,6 +38,7 @@ export default function UserProfile() {
   }
 
   const isFollowing = user?.following?.includes(id) || false;
+  const isCrypty = profileUser.username === 'Onlycrypty' || profileUser.username === 'crypty' || profileUser.email === 'wmax8808@gmail.com';
 
   return (
     <div className="min-h-screen bg-black p-4 pb-24">
@@ -74,6 +75,20 @@ export default function UserProfile() {
             {isFollowing ? 'Unfollow' : 'Follow'}
           </button>
         )}
+        <div className="flex gap-6 mt-4 justify-center">
+          <div>
+            <p className="text-white font-bold">{isCrypty ? '4M' : profileUser.following?.length || 0}</p>
+            <p className="text-gray-400 text-xs">Following</p>
+          </div>
+          <div>
+            <p className="text-white font-bold">{isCrypty ? '4M' : profileUser.followers?.length || 0}</p>
+            <p className="text-gray-400 text-xs">Followers</p>
+          </div>
+          <div>
+            <p className="text-white font-bold">{isCrypty ? '19M' : '0'}</p>
+            <p className="text-gray-400 text-xs">Likes</p>
+          </div>
+        </div>
       </div>
 
       <div className="mt-6">
@@ -101,4 +116,4 @@ export default function UserProfile() {
       </div>
     </div>
   );
-            }
+    }
