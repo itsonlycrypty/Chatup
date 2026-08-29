@@ -1,20 +1,25 @@
 import { NextResponse } from 'next/server';
 
-// Your existing YouTube API key
-const YOUTUBE_API_KEY = 'AIzaSyCuIFjoCZn9SQApevaGTSi9xujk4WorsUE';
+// Your LamaTok key (hardcoded)
+const LAMATOK_KEY = 's700p889eq193fgj63eqa9u1e76bivte';
 
 export async function GET() {
   try {
-    // Fetch up to 50 trending short videos (under 60 seconds)
     const res = await fetch(
-      `https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&maxResults=50&key=${YOUTUBE_API_KEY}&regionCode=US&videoDuration=short`
+      'https://api.lamatok.com/v1/search?q=trending&count=20',
+      {
+        headers: {
+          'x-access-key': LAMATOK_KEY,
+          'accept': 'application/json',
+        },
+      }
     );
 
     if (!res.ok) {
       const errorText = await res.text();
-      console.error('YouTube error:', res.status, errorText);
+      console.error('LamaTok error:', res.status, errorText);
       return NextResponse.json(
-        { error: `YouTube API error: ${res.status}` },
+        { error: `LamaTok error: ${res.status}` },
         { status: res.status }
       );
     }
@@ -22,28 +27,26 @@ export async function GET() {
     const data = await res.json();
 
     if (data.items && data.items.length > 0) {
-      // Shuffle to randomize order every time
-      const shuffled = data.items.sort(() => Math.random() - 0.5);
-      const items = shuffled.map((item: any) => ({
-        id: `yt_${item.id}`,
-        title: item.snippet.title,
-        desc: item.snippet.description || '',
-        video: `https://www.youtube.com/watch?v=${item.id}`,
-        play: `https://www.youtube.com/watch?v=${item.id}`,
-        cover: item.snippet.thumbnails.medium.url || '',
+      const items = data.items.map((item: any) => ({
+        id: `tt_${item.id || Math.random().toString(36)}`,
+        title: item.title || item.description || 'TikTok Video',
+        desc: item.description || '',
+        video: item.video_url || item.url || '',
+        play: item.video_url || item.url || '',
+        cover: item.cover_url || '',
       }));
       return NextResponse.json({ data: items });
     } else {
       return NextResponse.json(
-        { error: 'No short videos found' },
+        { error: 'No trending videos found' },
         { status: 404 }
       );
     }
   } catch (error: any) {
-    console.error('YouTube fetch error:', error);
+    console.error('LamaTok fetch error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch' },
+      { error: error.message || 'Failed to fetch from LamaTok' },
       { status: 500 }
     );
   }
-}
+        }
