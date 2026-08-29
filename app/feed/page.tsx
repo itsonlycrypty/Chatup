@@ -26,7 +26,6 @@ export default function Feed() {
   const [error, setError] = useState<string | null>(null);
   const hasFetched = useRef(false);
 
-  // Load posts from DB
   const loadData = async () => {
     const data = await fetchData();
     const homePosts = (data.posts || []).filter((p: any) => p.type !== 'short');
@@ -36,7 +35,6 @@ export default function Feed() {
     setPosts(sortedHome);
   };
 
-  // Fetch TikTok trending via our API route
   const fetchTikTokTrending = async () => {
     setLoading(true);
     setError(null);
@@ -152,12 +150,7 @@ export default function Feed() {
     return user.following?.includes(userId) || false;
   };
 
-  // Search (users + dummy videos)
-  const searchTikTok = async (query: string) => {
-    // For now, just return empty array – we can integrate TikTok search later.
-    return [];
-  };
-
+  // Search (users only for now)
   const performSearch = async (query: string) => {
     setSearchQuery(query);
     if (!query.trim()) {
@@ -174,8 +167,7 @@ export default function Feed() {
       u.email?.toLowerCase().includes(query.toLowerCase())
     );
     setSearchResults(filteredUsers);
-    const videos = await searchTikTok(query);
-    setSearchVideos(videos);
+    setSearchVideos([]);
     setSearching(false);
   };
 
@@ -187,7 +179,6 @@ export default function Feed() {
     setSearchActiveTab('users');
   };
 
-  // Render post (Instagram style)
   const renderPost = (p: any) => {
     const postUser = getUser(p.userId);
     const isFollowingUser = isFollowing(p.userId);
@@ -360,9 +351,7 @@ export default function Feed() {
             {searchQuery.trim() && !searching && (
               <div className="mb-4">
                 <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">Suggestions</div>
-                {searchResults.length === 0 && searchVideos.length === 0 && (
-                  <p className="text-gray-500 dark:text-gray-400 text-sm">No results</p>
-                )}
+                {searchResults.length === 0 && <p className="text-gray-500 dark:text-gray-400 text-sm">No results</p>}
                 {searchResults.slice(0, 3).map((u) => (
                   <div
                     key={u.id}
@@ -385,22 +374,6 @@ export default function Feed() {
                     </div>
                   </div>
                 ))}
-                {searchVideos.slice(0, 3).map((v) => (
-                  <div
-                    key={v.id}
-                    className="flex items-center gap-3 bg-gray-100 dark:bg-gray-700 p-2 rounded-lg mb-1 hover:bg-gray-200 dark:hover:bg-gray-600 transition cursor-pointer"
-                    onClick={() => {
-                      setSearchQuery(v.title);
-                      performSearch(v.title);
-                    }}
-                  >
-                    <img src={v.thumbnail} alt={v.title} className="w-12 h-8 object-cover rounded" />
-                    <div>
-                      <p className="text-gray-900 dark:text-white text-sm truncate">{v.title}</p>
-                      <p className="text-gray-500 dark:text-gray-400 text-xs">{v.channel}</p>
-                    </div>
-                  </div>
-                ))}
               </div>
             )}
 
@@ -413,19 +386,11 @@ export default function Feed() {
               >
                 Users
               </button>
-              <button
-                onClick={() => setSearchActiveTab('videos')}
-                className={`flex-1 py-2 rounded-full text-sm font-semibold transition ${
-                  searchActiveTab === 'videos' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                }`}
-              >
-                Videos
-              </button>
             </div>
 
             {searching ? (
               <p className="text-gray-500 dark:text-gray-400 text-center">Searching...</p>
-            ) : searchActiveTab === 'users' ? (
+            ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {searchResults.length === 0 && searchQuery ? (
                   <p className="text-gray-500 dark:text-gray-400 text-center">No users found</p>
@@ -445,30 +410,10 @@ export default function Feed() {
                   </div>
                 ))}
               </div>
-            ) : (
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {searchVideos.length === 0 && searchQuery ? (
-                  <p className="text-gray-500 dark:text-gray-400 text-center">No videos found</p>
-                ) : searchVideos.map((v) => (
-                  <div
-                    key={v.id}
-                    className="bg-gray-100 dark:bg-gray-700 p-3 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition cursor-pointer"
-                    onClick={() => window.open(v.url, '_blank')}
-                  >
-                    <div className="flex items-center gap-3">
-                      <img src={v.thumbnail} alt={v.title} className="w-20 h-12 object-cover rounded" />
-                      <div>
-                        <p className="text-gray-900 dark:text-white text-sm font-semibold truncate">{v.title}</p>
-                        <p className="text-gray-500 dark:text-gray-400 text-xs">{v.channel}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
             )}
           </div>
         </div>
       )}
     </div>
   );
-        }
+}
