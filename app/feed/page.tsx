@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   FaHeart, FaSearch, FaComment, FaPaperPlane, FaUserPlus, FaUserCheck,
-  FaShare, FaTimes, FaSync, FaTrash
+  FaShare, FaTimes, FaSync, FaTrash, FaVideo, FaUser
 } from 'react-icons/fa';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -11,6 +11,8 @@ import { useAuth } from '@/context/AuthContext';
 import { fetchData, saveData } from '@/lib/db';
 import VideoEmbed from '@/components/VideoEmbed';
 
+const YOUTUBE_API_KEY = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
+
 export default function Feed() {
   const { user, allUsers, followUser } = useAuth();
   const [posts, setPosts] = useState<any[]>([]);
@@ -18,7 +20,9 @@ export default function Feed() {
   const [commentText, setCommentText] = useState<{ [key: string]: string }>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchVideos, setSearchVideos] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
+  const [searchActiveTab, setSearchActiveTab] = useState<'users' | 'videos'>('users');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +37,6 @@ export default function Feed() {
     setPosts(sortedHome);
   };
 
-  // Fetch 50 new videos
   const fetchVideos = async () => {
     setLoading(true);
     setError(null);
@@ -82,18 +85,13 @@ export default function Feed() {
       }
     };
     init();
-
     const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        fetchVideos();
-      }
+      if (!document.hidden) fetchVideos();
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
-
     const interval = setInterval(() => {
       if (!document.hidden) fetchVideos();
     }, 5 * 60 * 1000);
-
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(interval);
@@ -174,13 +172,37 @@ export default function Feed() {
     return user.following?.includes(userId) || false;
   };
 
+  // ----- Search -----
+  const searchYouTube = async (query: string) => {
+    if (!YOUTUBE_API_KEY) return [];
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&key=${YOUTUBE_API_KEY}&maxResults=10&type=video`
+      );
+      const data = await res.json();
+      if (data.items) {
+        return data.items.map((item: any) => ({
+          id: item.id.videoId,
+          title: item.snippet.title,
+          description: item.snippet.description,
+          thumbnail: item.snippet.thumbnails.medium.url,
+          url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+          channel: item.snippet.channelTitle,
+        }));
+      }
+      return [];
+    } catch (e) { return []; }
+  };
+
   const performSearch = async (query: string) => {
     setSearchQuery(query);
     if (!query.trim()) {
       setSearchResults([]);
+      setSearchVideos([]);
       return;
     }
     setSearching(true);
+    // Search users
     const data = await fetchData();
     const users = data.users || [];
     const filteredUsers = users.filter((u: any) =>
@@ -189,6 +211,9 @@ export default function Feed() {
       u.email?.toLowerCase().includes(query.toLowerCase())
     );
     setSearchResults(filteredUsers);
+    // Search videos
+    const videos = await searchYouTube(query);
+    setSearchVideos(videos);
     setSearching(false);
   };
 
@@ -196,6 +221,8 @@ export default function Feed() {
     setShowSearch(true);
     setSearchQuery('');
     setSearchResults([]);
+    setSearchVideos([]);
+    setSearchActiveTab('users');
   };
 
   const renderPost = (p: any) => {
@@ -360,7 +387,7 @@ export default function Feed() {
 
       <FloatingPlusButton />
 
-      {/* Full‑screen Search Modal */}
+      {/* Full‑screen Search Modal with Users & Videos tabs */}
       {showSearch && (
         <div className="fixed inset-0 bg-white dark:bg-black z-50 flex flex-col">
           <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
@@ -374,20 +401,85 @@ export default function Feed() {
               <FaSearch className="absolute left-3 top-3 text-gray-400 dark:text-gray-500" />
               <input
                 type="text"
-                placeholder="Search users..."
+                placeholder="Search users or videos..."
                 className="w-full bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white p-3 pl-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={searchQuery}
                 onChange={(e) => performSearch(e.target.value)}
                 autoFocus
               />
             </div>
+            {/* Tabs */}
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => setSearchActiveTab('users')}
+                className={`flex-1 py-2 rounded-full text-sm font-semibold transition ${
+                  searchActiveTab === 'users' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                <FaUser className="inline mr-1" /> Users
+              </button>
+              <button
+                onClick={() => setSearchActiveTab('videos')}
+                className={`flex-1 py-2 rounded-full text-sm font-semibold transition ${
+                  searchActiveTab === 'videos' ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                <FaVideo className="inline mr-1" /> Videos
+              </button>
+            </div>
+            {/* Suggestions */}
+            {searchQuery.trim() && !searching && (
+              <div className="mb-4">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">Suggestions</div>
+                {searchResults.length === 0 && searchVideos.length === 0 && (
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">No results</p>
+                )}
+                {searchActiveTab === 'users' && searchResults.slice(0, 5).map((u) => (
+                  <div
+                    key={u.id}
+                    className="flex items-center gap-3 bg-gray-100 dark:bg-gray-700 p-2 rounded-lg mb-1 hover:bg-gray-200 dark:hover:bg-gray-600 transition cursor-pointer"
+                    onClick={() => {
+                      setSearchQuery(u.username);
+                      performSearch(u.username);
+                    }}
+                  >
+                    {u.photoURL ? (
+                      <Image src={u.photoURL} alt="Avatar" width={28} height={28} className="w-7 h-7 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs">
+                        {u.displayName?.[0]?.toUpperCase() || 'U'}
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-gray-900 dark:text-white text-sm font-semibold">{u.displayName || u.email}</p>
+                      <p className="text-gray-500 dark:text-gray-400 text-xs">@{u.username}</p>
+                    </div>
+                  </div>
+                ))}
+                {searchActiveTab === 'videos' && searchVideos.slice(0, 5).map((v) => (
+                  <div
+                    key={v.id}
+                    className="flex items-center gap-3 bg-gray-100 dark:bg-gray-700 p-2 rounded-lg mb-1 hover:bg-gray-200 dark:hover:bg-gray-600 transition cursor-pointer"
+                    onClick={() => {
+                      setSearchQuery(v.title);
+                      performSearch(v.title);
+                    }}
+                  >
+                    <img src={v.thumbnail} alt={v.title} className="w-12 h-8 object-cover rounded" />
+                    <div>
+                      <p className="text-gray-900 dark:text-white text-sm truncate">{v.title}</p>
+                      <p className="text-gray-500 dark:text-gray-400 text-xs">{v.channel}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Full results */}
             {searching ? (
               <p className="text-gray-500 dark:text-gray-400 text-center">Searching...</p>
-            ) : (
+            ) : searchActiveTab === 'users' ? (
               <div className="space-y-2">
-                {searchResults.length === 0 && searchQuery ? (
-                  <p className="text-gray-500 dark:text-gray-400 text-center">No users found</p>
-                ) : searchResults.map((u) => (
+                {searchResults.map((u) => (
                   <Link
                     key={u.id}
                     href={`/profile/${u.id}`}
@@ -408,10 +500,28 @@ export default function Feed() {
                   </Link>
                 ))}
               </div>
+            ) : (
+              <div className="space-y-2">
+                {searchVideos.map((v) => (
+                  <div
+                    key={v.id}
+                    className="bg-gray-100 dark:bg-gray-800 p-3 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition cursor-pointer"
+                    onClick={() => window.open(v.url, '_blank')}
+                  >
+                    <div className="flex items-center gap-3">
+                      <img src={v.thumbnail} alt={v.title} className="w-20 h-12 object-cover rounded" />
+                      <div>
+                        <p className="text-gray-900 dark:text-white text-sm font-semibold truncate">{v.title}</p>
+                        <p className="text-gray-500 dark:text-gray-400 text-xs">{v.channel}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>
       )}
     </div>
   );
-        }
+}
