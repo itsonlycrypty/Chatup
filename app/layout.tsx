@@ -9,7 +9,17 @@ const inter = Inter({ subsets: ['latin'] });
 
 function AppContent({ children }: { children: React.ReactNode }) {
   const { loading } = useAuth();
-  if (loading) {
+  const [showLoader, setShowLoader] = useState(true);
+
+  useEffect(() => {
+    // Show loading for at least 10 seconds
+    const timer = setTimeout(() => {
+      if (!loading) setShowLoader(false);
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, [loading]);
+
+  if (loading || showLoader) {
     return (
       <div className="flex items-center justify-center h-screen bg-[var(--bg)]">
         <div className="text-center">
@@ -36,4 +46,4 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </body>
     </html>
   );
-}
+  }
