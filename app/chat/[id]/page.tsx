@@ -439,11 +439,11 @@ export default function ChatRoom() {
     alert('Forward to: (Implement contact picker)');
   };
 
-  // ----- Star selected message -----
+  // ----- Star selected message (with fallback) -----
   const starSelectedMessage = async () => {
     if (selectedMessages.length === 0) return alert('Select a message first');
     const data = await fetchData();
-    const starred = data.starredMessages || [];
+    const starred = data.starredMessages || []; // ✅ fallback
     for (const id of selectedMessages) {
       const msg = messages.find(m => m.id === id);
       if (msg && !starred.find((s: any) => s.id === msg.id)) {
@@ -456,11 +456,11 @@ export default function ChatRoom() {
     setSelectedMessages([]);
   };
 
-  // ----- Save selected message -----
+  // ----- Save selected message (with fallback) -----
   const saveSelectedMessage = async () => {
     if (selectedMessages.length === 0) return alert('Select a message first');
     const data = await fetchData();
-    const saved = data.savedMessages || [];
+    const saved = data.savedMessages || []; // ✅ fallback
     for (const id of selectedMessages) {
       const msg = messages.find(m => m.id === id);
       if (msg && !saved.find((s: any) => s.id === msg.id)) {
@@ -793,4 +793,4 @@ export default function ChatRoom() {
       </div>
     </div>
   );
-    }
+}
