@@ -12,20 +12,19 @@ function AppContent({ children }: { children: React.ReactNode }) {
   const [showLoader, setShowLoader] = useState(true);
 
   useEffect(() => {
-    // Show loading for at least 10 seconds
     const timer = setTimeout(() => {
       if (!loading) setShowLoader(false);
-    }, 10000);
+    }, 2000);
     return () => clearTimeout(timer);
   }, [loading]);
 
   if (loading || showLoader) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[var(--bg)]">
+      <div className="flex items-center justify-center h-screen bg-[#1a1a1a]"> {/* Dark gray background */}
         <div className="text-center">
           <div className="animate-spin h-16 w-16 border-t-4 border-b-4 border-blue-500 rounded-full mx-auto mb-6"></div>
-          <h1 className="text-3xl font-bold text-[var(--text)]">Chat Up</h1>
-          <p className="text-gray-400 text-sm mt-2">created by <span className="text-blue-400">Crypty</span> &amp; assisted by <span className="text-purple-400">Mole</span></p>
+          <h1 className="text-3xl font-bold text-white">Chat Up</h1>
+          <p className="text-gray-400 text-sm mt-4">created by <span className="text-blue-400">Crypty</span> &amp; assisted by <span className="text-purple-400">Mole</span></p>
         </div>
       </div>
     );
@@ -46,4 +45,4 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </body>
     </html>
   );
-  }
+            }
