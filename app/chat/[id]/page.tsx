@@ -13,6 +13,9 @@ import {
 } from 'react-icons/fa';
 import StickerPicker from '@/components/StickerPicker';
 
+// Default WhatsApp‑style background (subtle pattern)
+const DEFAULT_CHAT_BG = 'https://www.transparenttextures.com/patterns/white-diamond.png';
+
 export default function ChatRoom() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -43,10 +46,9 @@ export default function ChatRoom() {
   const audioChunksRef = useRef<Blob[]>([]);
   const [isRecording, setIsRecording] = useState(false);
 
-  // ----- Helper -----
   const getChatId = (a: string, b: string) => [a, b].sort().join('_');
 
-  // ----- Text‑to‑speech (defined BEFORE loadMessages) -----
+  // ----- Text‑to‑speech -----
   const speakText = (text: string) => {
     if (!speechSynth.current || !voiceEnabled) return;
     const utterance = new SpeechSynthesisUtterance(text);
@@ -118,7 +120,10 @@ export default function ChatRoom() {
         });
         setIsGroup(true);
         setIsAI(false);
-        setBackground('');
+        // Use user's default chat background if set, else default pattern
+        const users = data.users || [];
+        const currentUser = users.find((u: any) => u.id === user?.id);
+        setBackground(currentUser?.chatBackground || DEFAULT_CHAT_BG);
         return;
       }
       const channels = data.channels || [];
@@ -137,7 +142,9 @@ export default function ChatRoom() {
         });
         setIsChannel(true);
         setIsAI(false);
-        setBackground('');
+        const users = data.users || [];
+        const currentUser = users.find((u: any) => u.id === user?.id);
+        setBackground(currentUser?.chatBackground || DEFAULT_CHAT_BG);
         return;
       }
       const users = data.users || [];
@@ -147,13 +154,14 @@ export default function ChatRoom() {
         setIsAI(false);
         setIsGroup(false);
         setIsChannel(false);
-        setBackground('');
+        const currentUser = users.find((u: any) => u.id === user?.id);
+        setBackground(currentUser?.chatBackground || DEFAULT_CHAT_BG);
       }
     };
     findRecipient();
   }, [id]);
 
-  // ----- Load messages (speakText is defined above) -----
+  // ----- Load messages -----
   const loadMessages = async () => {
     if (!user || !id) return;
     let key: string;
@@ -210,7 +218,6 @@ export default function ChatRoom() {
     if (!text.trim() && !mediaData) return;
     if (!user || !recipient) return;
 
-    // Permission checks
     if (isGroup) {
       if (recipient.settings?.preventMediaShare && mediaData) {
         alert('Media sharing is disabled in this group.');
@@ -255,7 +262,6 @@ export default function ChatRoom() {
     setText('');
     loadMessages();
 
-    // Notifications (simplified)
     if (isGroup || isChannel) {
       const members = recipient.members || [];
       const notifText = `${user.displayName} sent a message in ${recipient.displayName}`;
@@ -326,7 +332,7 @@ export default function ChatRoom() {
     reader.readAsDataURL(file);
   };
 
-  // ----- Voice recording with permission check -----
+  // ----- Voice recording -----
   const startRecording = async () => {
     const hasPermission = await requestMicrophonePermission();
     if (!hasPermission) return;
@@ -426,7 +432,7 @@ export default function ChatRoom() {
     );
   };
 
-  // ----- Clear all messages (admin only) -----
+  // ----- Clear all messages -----
   const clearAllMessages = async () => {
     if (!user) return;
     if (!confirm('Clear all messages? This cannot be undone.')) return;
@@ -511,14 +517,13 @@ export default function ChatRoom() {
     }
   };
 
-  // ----- Edit message (start) -----
+  // ----- Edit message -----
   const startEditMessage = (message: any) => {
     if (message.senderId !== user?.id) return;
     setEditingMessageId(message.id);
     setEditText(message.text);
   };
 
-  // ----- Edit message (save) -----
   const saveEditMessage = async () => {
     if (!editingMessageId || !editText.trim()) return;
     let key: string;
@@ -567,13 +572,17 @@ export default function ChatRoom() {
 
   return (
     <div
-      className="flex flex-col h-screen bg-cover bg-center bg-no-repeat"
-      style={{ backgroundImage: background ? `url(${background})` : 'none' }}
+      className="flex flex-col h-screen overflow-hidden bg-cover bg-center bg-no-repeat"
+      style={{ backgroundImage: background && !isAI ? `url(${background})` : (isAI ? `url(${background})` : 'none') }}
     >
-      <div className={`absolute inset-0 ${background ? 'bg-black/60' : 'bg-black'}`} />
-      <div className="relative z-10 flex flex-col h-full">
+      {/* For AI, we keep their custom background; for others, we use the pattern */}
+      {!isAI && background && (
+        <div className="absolute inset-0 bg-cover bg-center opacity-10" style={{ backgroundImage: `url(${background})` }} />
+      )}
+      <div className={`absolute inset-0 ${background && !isAI ? 'bg-black/40' : (isAI ? 'bg-black/60' : 'bg-black/60')}`} />
+      <div className="relative z-10 flex flex-col h-full overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-3 bg-black/50 backdrop-blur-sm">
+        <div className="flex items-center justify-between p-3 bg-black/50 backdrop-blur-sm flex-shrink-0">
           <div className="flex items-center gap-3">
             <button onClick={() => window.history.back()} className="text-white hover:text-gray-300">
               <FaArrowLeft size={20} />
@@ -613,8 +622,8 @@ export default function ChatRoom() {
           </div>
         </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Messages – scrollable area */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-2">
           {messages.map((m) => {
             const isOwn = m.senderId === user?.id;
             const isEditing = editingMessageId === m.id;
@@ -701,8 +710,8 @@ export default function ChatRoom() {
           <div ref={bottomRef} />
         </div>
 
-        {/* Input (sticky at bottom) */}
-        <div className="sticky bottom-0 bg-black/50 backdrop-blur-sm p-3 flex gap-2 items-center">
+        {/* Input – raised higher with more padding */}
+        <div className="sticky bottom-0 bg-black/70 backdrop-blur-sm p-4 flex gap-2 items-center flex-shrink-0 border-t border-gray-700">
           <button
             onClick={() => fileInputRef.current?.click()}
             className="text-white hover:text-blue-400"
@@ -732,14 +741,14 @@ export default function ChatRoom() {
             {isRecording ? <FaStop size={20} /> : <FaMicrophone size={20} />}
           </button>
           <input
-            className="flex-1 bg-gray-800/80 text-white p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 bg-gray-700/80 text-white p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
             placeholder={isRecording ? '🔴 Recording...' : 'Type a message...'}
             disabled={isRecording}
           />
-          <button onClick={() => sendMessage()} className="bg-blue-600 hover:bg-blue-700 px-6 rounded-xl text-white font-semibold transition">
+          <button onClick={() => sendMessage()} className="bg-blue-600 hover:bg-blue-700 px-6 rounded-xl text-white font-semibold transition flex-shrink-0">
             <FaPaperPlane />
           </button>
         </div>
@@ -755,7 +764,7 @@ export default function ChatRoom() {
           />
         )}
 
-        {/* Full‑screen Three‑Dot Menu */}
+        {/* Three‑Dot Menu */}
         {showMenu && (
           <div className="fixed inset-0 bg-black z-50 flex flex-col">
             <div className="flex items-center p-4 bg-gray-900 border-b border-gray-700">
@@ -802,4 +811,4 @@ export default function ChatRoom() {
       </div>
     </div>
   );
-}
+    }
