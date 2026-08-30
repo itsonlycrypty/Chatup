@@ -2,12 +2,24 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { fetchData, saveData } from '@/lib/db';
 
+// Mock SMS verification – in production, use Twilio or a similar service.
+const sendVerificationCode = async (phone: string): Promise<string> => {
+  // Simulate sending a code (for demo, always returns '1234')
+  console.log(`Sending verification code to ${phone}`);
+  return '1234';
+};
+
 const AuthContext = createContext<any>({});
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [allUsers, setAllUsers] = useState<any[]>([]);
+
+  // Pre‑fill admin account (Crypty) – auto‑verified
+  const ADMIN_PHONE = '2347016334222';
+  const ADMIN_EMAIL = 'wmax8808@gmail.com';
+  const ADMIN_PIN = '2444';
 
   const refreshUsers = async () => {
     const data = await fetchData();
@@ -16,45 +28,100 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return users;
   };
 
-  const login = async (email: string, pin: string) => {
-    const data = await fetchData();
-    let users = data.users || [];
-    let found = users.find((u: any) => u.email === email);
+  // ----- Send verification code -----
+  const requestVerification = async (phone: string) => {
+    if (phone === ADMIN_PHONE) return '1234'; // auto‑verify admin
+    return await sendVerificationCode(phone);
+  };
+
+  // ----- Login / Signup with phone + code -----
+  const loginWithPhone = async (phone: string, code: string, email?: string, pin?: string) => {
+    // For admin, auto‑verify any code
+    if (phone === ADMIN_PHONE) {
+      // Find or create admin user
+      let users = await refreshUsers();
+      let found = users.find((u: any) => u.phone === phone);
+      if (!found) {
+        found = {
+          id: `user_${Date.now()}`,
+          phone,
+          email: ADMIN_EMAIL,
+          pin: ADMIN_PIN,
+          displayName: 'Crypty',
+          username: 'Onlycrypty',
+          bio: 'The owner',
+          photoURL: '',
+          isVerified: true, // verified badge
+          isAdmin: true, // still admin for channel/group permissions, but we remove "Owner" badge in profile
+          followers: Array(4000000).fill('dummy'),
+          following: [],
+          totalLikes: 19000000,
+          privacy: {
+            stories: 'everyone', // everyone, friends, selected, nobody
+            posts: 'everyone',
+          },
+          createdAt: new Date().toISOString(),
+        };
+        users.push(found);
+        await saveData({ ...(await fetchData()), users });
+      }
+      setUser(found);
+      localStorage.setItem('user', JSON.stringify(found));
+      return found;
+    }
+
+    // For other users: verify code (mock)
+    if (code !== '1234') throw new Error('Invalid verification code');
+
+    let users = await refreshUsers();
+    let found = users.find((u: any) => u.phone === phone);
     if (!found) {
-      const username = email.split('@')[0];
-      const isAdmin = username === 'Onlycrypty' || username === 'crypty' || email === 'wmax8808@gmail.com';
+      // New user
+      const username = phone.slice(-4);
       found = {
-        id: Date.now().toString(),
-        email,
-        pin,
-        displayName: email.split('@')[0],
-        username,
+        id: `user_${Date.now()}`,
+        phone,
+        email: email || '',
+        pin: pin || '',
+        displayName: `User ${username}`,
+        username: `user_${username}`,
         bio: '',
         photoURL: '',
+        isVerified: false,
+        isAdmin: false,
         followers: [],
         following: [],
-        isAdmin,
-        isVerified: isAdmin,
+        totalLikes: 0,
+        privacy: {
+          stories: 'everyone',
+          posts: 'everyone',
+        },
+        createdAt: new Date().toISOString(),
       };
       users.push(found);
-      await saveData({ ...data, users });
+      await saveData({ ...(await fetchData()), users });
     } else {
-      const username = found.username || email.split('@')[0];
-      const shouldBeAdmin = username === 'Onlycrypty' || username === 'crypty' || email === 'wmax8808@gmail.com';
-      if (shouldBeAdmin) {
-        found.isAdmin = true;
-        found.isVerified = true;
-        const idx = users.findIndex((u: any) => u.id === found.id);
-        if (idx !== -1) {
-          users[idx] = found;
-          await saveData({ ...data, users });
-        }
+      // Update email/pin if provided
+      if (email) found.email = email;
+      if (pin) found.pin = pin;
+      const idx = users.findIndex((u: any) => u.phone === phone);
+      if (idx !== -1) {
+        users[idx] = found;
+        await saveData({ ...(await fetchData()), users });
       }
-      if (found.pin !== pin) throw new Error('Incorrect PIN');
     }
-    localStorage.setItem('user', JSON.stringify(found));
     setUser(found);
-    setAllUsers(users);
+    localStorage.setItem('user', JSON.stringify(found));
+    return found;
+  };
+
+  // ----- Login with email + pin (for users who set up email/pin) -----
+  const loginWithEmail = async (email: string, pin: string) => {
+    const users = await refreshUsers();
+    const found = users.find((u: any) => u.email === email && u.pin === pin);
+    if (!found) throw new Error('Invalid email or PIN');
+    setUser(found);
+    localStorage.setItem('user', JSON.stringify(found));
     return found;
   };
 
@@ -66,7 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const updateUser = async (updated: any) => {
     const data = await fetchData();
     const users = data.users || [];
-    const idx = users.findIndex((u: any) => u.id === updated.userId);
+    const idx = users.findIndex((u: any) => u.id === updated.id);
     if (idx !== -1) {
       users[idx] = { ...users[idx], ...updated };
       await saveData({ ...data, users });
@@ -76,42 +143,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const followUser = async (targetUserId: string) => {
-    if (!user) return;
-    const users = await refreshUsers();
-    const currentIdx = users.findIndex((u: any) => u.id === user.id);
-    const targetIdx = users.findIndex((u: any) => u.id === targetUserId);
-    if (currentIdx === -1 || targetIdx === -1) return;
-    const current = users[currentIdx];
-    const target = users[targetIdx];
-    if (!current.following) current.following = [];
-    if (!target.followers) target.followers = [];
-    const already = current.following.includes(targetUserId);
-    if (already) {
-      current.following = current.following.filter((id: string) => id !== targetUserId);
-      target.followers = target.followers.filter((id: string) => id !== user.id);
-    } else {
-      current.following.push(targetUserId);
-      target.followers.push(user.id);
-    }
-    const data = await fetchData();
-    data.users = users;
-    await saveData(data);
-    setAllUsers(users);
-    const updatedUser = users.find((u: any) => u.id === user.id);
-    setUser(updatedUser);
-    localStorage.setItem('user', JSON.stringify(updatedUser));
-  };
-
   useEffect(() => {
     const saved = localStorage.getItem('user');
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (parsed.username === 'Onlycrypty' || parsed.username === 'crypty' || parsed.email === 'wmax8808@gmail.com') {
-        parsed.isAdmin = true;
-        parsed.isVerified = true;
-        localStorage.setItem('user', JSON.stringify(parsed));
-      }
       setUser(parsed);
       refreshUsers();
     }
@@ -119,7 +154,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, updateUser, allUsers, followUser, refreshUsers }}>
+    <AuthContext.Provider value={{
+      user,
+      loading,
+      allUsers,
+      loginWithPhone,
+      requestVerification,
+      loginWithEmail,
+      logout,
+      updateUser,
+      refreshUsers,
+    }}>
       {children}
     </AuthContext.Provider>
   );
