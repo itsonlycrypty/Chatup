@@ -19,8 +19,10 @@ export const fetchData = async () => {
       channels: record.channels || [],
       groupInvites: record.groupInvites || [],
       notifications: record.notifications || [],
-      stickers: record.stickers || [], // built‑in + custom stickers
+      stickers: record.stickers || [],
       stickerPacks: record.stickerPacks || [],
+      starredMessages: record.starredMessages || [], // ✅ added
+      savedMessages: record.savedMessages || [],     // ✅ added
     };
   } catch (e) {
     console.error('Fetch error:', e);
@@ -37,6 +39,8 @@ export const fetchData = async () => {
       notifications: [],
       stickers: [],
       stickerPacks: [],
+      starredMessages: [],
+      savedMessages: [],
     };
   }
 };
