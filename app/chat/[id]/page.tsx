@@ -46,11 +46,6 @@ export default function ChatRoom() {
   // ----- Helper to generate chat ID for private chats -----
   const getChatId = (a: string, b: string) => [a, b].sort().join('_');
 
-  // ----- Determine chat key -----
-  let chatKey = id as string;
-  // For private chats, we use getChatId; for groups/channels, we use their ID directly.
-  // We'll set this after recipient is loaded.
-
   // ----- Load recipient (AI, user, group, channel) -----
   useEffect(() => {
     const findRecipient = async () => {
@@ -131,7 +126,7 @@ export default function ChatRoom() {
     findRecipient();
   }, [id]);
 
-  // ----- Load messages -----
+  // ----- Load messages (chatKey is defined inside this function) -----
   const loadMessages = async () => {
     if (!user || !id) return;
     // Determine chat key based on recipient type
@@ -191,16 +186,12 @@ export default function ChatRoom() {
 
     // Permission checks for groups/channels
     if (isGroup) {
-      // If group settings prevent media sharing and mediaData is present
       if (recipient.settings?.preventMediaShare && mediaData) {
         alert('Media sharing is disabled in this group.');
         return;
       }
-      // If user is not admin and group requires admin approval for messages? We'll handle via settings.
-      // For now, we allow all members to send text messages.
     }
     if (isChannel) {
-      // Only admins can send messages in channels
       const isAdmin = recipient.admins?.includes(user.id);
       if (!isAdmin) {
         alert('Only admins can send messages in this channel.');
@@ -228,7 +219,7 @@ export default function ChatRoom() {
     };
     if (mediaData) {
       if (mediaType === 'sticker') {
-        msg.sticker = mediaData; // sticker is image URL
+        msg.sticker = mediaData;
       } else {
         msg.media = mediaData;
         msg.mediaType = mediaType || 'file';
@@ -240,7 +231,6 @@ export default function ChatRoom() {
     loadMessages();
 
     // ----- Notification System -----
-    // Send notification to other members (if group or channel)
     if (isGroup || isChannel) {
       const members = recipient.members || [];
       const notifText = `${user.displayName} sent a message in ${recipient.displayName}`;
@@ -262,7 +252,6 @@ export default function ChatRoom() {
         }
       }
     } else if (!isAI) {
-      // Private chat: notify the other user
       const otherUserId = recipient.id;
       if (otherUserId !== user.id) {
         const notif = {
@@ -366,7 +355,7 @@ export default function ChatRoom() {
     return m.text;
   };
 
-  // ----- Delete message (with permanent delete for admins) -----
+  // ----- Delete message -----
   const deleteMessage = async (messageId: string, permanent: boolean = false) => {
     if (!user) return;
     let key: string;
@@ -382,29 +371,17 @@ export default function ChatRoom() {
     if (msgIndex === -1) return;
     const msg = chats[key][msgIndex];
 
-    // Permission checks
     if (permanent) {
-      // Only admins can permanently delete for everyone
       const isAdmin = isGroup ? recipient.admins?.includes(user.id) : (isChannel ? recipient.admins?.includes(user.id) : false);
       if (!isAdmin) {
         alert('Only admins can permanently delete messages.');
         return;
       }
-      // Permanently remove from chat
       chats[key].splice(msgIndex, 1);
     } else {
-      // Normal user: delete only from their side (mark as hidden for themselves)
-      // We'll implement a simple filter: remove from their local view
-      // For simplicity, we'll just remove it from the array (affects all)
-      // Actually we should have a "deleted for me" flag. We'll keep it simple: delete for all for now.
-      // But we can differentiate: if user is not admin, they can only "hide" for themselves.
-      // We'll implement a "deleted" flag.
       if (msg.senderId === user.id) {
-        // Sender can delete for everyone (like WhatsApp)
         chats[key].splice(msgIndex, 1);
       } else {
-        // For others: just hide from their view (we'll add a filter on load)
-        // We'll add a "hiddenFor" array
         if (!msg.hiddenFor) msg.hiddenFor = [];
         if (!msg.hiddenFor.includes(user.id)) {
           msg.hiddenFor.push(user.id);
@@ -423,7 +400,7 @@ export default function ChatRoom() {
     );
   };
 
-  // ----- Clear all messages (admin only) -----
+  // ----- Clear all messages -----
   const clearAllMessages = async () => {
     if (!user) return;
     if (!confirm('Clear all messages? This cannot be undone.')) return;
@@ -459,8 +436,6 @@ export default function ChatRoom() {
   // ----- Forward selected message -----
   const forwardSelectedMessage = async () => {
     if (selectedMessages.length === 0) return alert('Select a message first');
-    // In a full implementation, we'd open a list of contacts/groups/channels.
-    // For now, we'll just alert.
     alert('Forward to: (Implement contact picker)');
   };
 
@@ -510,14 +485,13 @@ export default function ChatRoom() {
     }
   };
 
-  // ----- Edit message (start) -----
+  // ----- Edit message -----
   const startEditMessage = (message: any) => {
     if (message.senderId !== user?.id) return;
     setEditingMessageId(message.id);
     setEditText(message.text);
   };
 
-  // ----- Edit message (save) -----
   const saveEditMessage = async () => {
     if (!editingMessageId || !editText.trim()) return;
     let key: string;
@@ -565,7 +539,7 @@ export default function ChatRoom() {
     });
   };
 
-  // ----- Navigate to AI/profile/group/channel profile -----
+  // ----- Navigate to profile -----
   const goToProfile = () => {
     if (isAI) {
       router.push(`/ai-profile/${recipient.id}`);
@@ -580,14 +554,6 @@ export default function ChatRoom() {
 
   if (!recipient) {
     return <div className="flex items-center justify-center h-screen bg-black text-white">Loading...</div>;
-  }
-
-  // Determine chat key for loadMessages and send
-  let chatKey: string;
-  if (isGroup || isChannel) {
-    chatKey = id as string;
-  } else {
-    chatKey = getChatId(user.id, id as string);
   }
 
   return (
@@ -728,7 +694,6 @@ export default function ChatRoom() {
 
         {/* Input with attachments, voice, stickers */}
         <div className="p-3 bg-black/50 backdrop-blur-sm flex gap-2 items-center">
-          {/* Attachment button */}
           <button
             onClick={() => fileInputRef.current?.click()}
             className="text-white hover:text-blue-400"
@@ -743,7 +708,6 @@ export default function ChatRoom() {
             onChange={handleFileSelect}
             className="hidden"
           />
-          {/* Sticker button */}
           <button
             onClick={() => setShowStickers(true)}
             className="text-white hover:text-yellow-400"
@@ -751,7 +715,6 @@ export default function ChatRoom() {
           >
             <FaSmile size={20} />
           </button>
-          {/* Voice note button */}
           <button
             onClick={isRecording ? stopRecording : startRecording}
             className={`text-white hover:text-red-400 ${isRecording ? 'text-red-400 animate-pulse' : ''}`}
@@ -772,7 +735,7 @@ export default function ChatRoom() {
           </button>
         </div>
 
-        {/* Sticker Picker Modal */}
+        {/* Sticker Picker */}
         {showStickers && (
           <StickerPicker
             onSelect={(sticker) => {
