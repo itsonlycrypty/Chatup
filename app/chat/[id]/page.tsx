@@ -153,7 +153,7 @@ export default function ChatRoom() {
     findRecipient();
   }, [id]);
 
-  // ----- Load messages (speakText is now defined above) -----
+  // ----- Load messages (speakText is defined above) -----
   const loadMessages = async () => {
     if (!user || !id) return;
     let key: string;
@@ -381,12 +381,172 @@ export default function ChatRoom() {
     return m.text;
   };
 
-  // ----- Delete message (shortened for brevity) -----
+  // ----- Delete message -----
   const deleteMessage = async (messageId: string, permanent: boolean = false) => {
-    // ... same as before (we keep the full implementation in the actual file)
+    if (!user) return;
+    let key: string;
+    if (isGroup || isChannel) {
+      key = id as string;
+    } else {
+      key = getChatId(user.id, id as string);
+    }
+    const data = await fetchData();
+    const chats = data.chats || {};
+    if (!chats[key]) return;
+    const msgIndex = chats[key].findIndex((m: any) => m.id === messageId);
+    if (msgIndex === -1) return;
+    const msg = chats[key][msgIndex];
+
+    if (permanent) {
+      const isAdmin = isGroup ? recipient.admins?.includes(user.id) : (isChannel ? recipient.admins?.includes(user.id) : false);
+      if (!isAdmin) {
+        alert('Only admins can permanently delete messages.');
+        return;
+      }
+      chats[key].splice(msgIndex, 1);
+    } else {
+      if (msg.senderId === user.id) {
+        chats[key].splice(msgIndex, 1);
+      } else {
+        if (!msg.hiddenFor) msg.hiddenFor = [];
+        if (!msg.hiddenFor.includes(user.id)) {
+          msg.hiddenFor.push(user.id);
+          chats[key][msgIndex] = msg;
+        }
+      }
+    }
+    await saveData({ ...data, chats });
+    loadMessages();
   };
 
-  // ----- Selection, copy, forward, star, save, share (same as before) -----
+  // ----- Message selection -----
+  const toggleSelectMessage = (messageId: string) => {
+    setSelectedMessages(prev =>
+      prev.includes(messageId) ? prev.filter(id => id !== messageId) : [...prev, messageId]
+    );
+  };
+
+  // ----- Clear all messages (admin only) -----
+  const clearAllMessages = async () => {
+    if (!user) return;
+    if (!confirm('Clear all messages? This cannot be undone.')) return;
+    const isAdmin = isGroup ? recipient.admins?.includes(user.id) : (isChannel ? recipient.admins?.includes(user.id) : false);
+    if (!isAdmin) {
+      alert('Only admins can clear all messages.');
+      return;
+    }
+    let key: string;
+    if (isGroup || isChannel) {
+      key = id as string;
+    } else {
+      key = getChatId(user.id, id as string);
+    }
+    const data = await fetchData();
+    const chats = data.chats || {};
+    if (chats[key]) {
+      chats[key] = [];
+      await saveData({ ...data, chats });
+      loadMessages();
+    }
+    setShowMenu(false);
+  };
+
+  // ----- Copy selected message -----
+  const copySelectedMessage = () => {
+    if (selectedMessages.length === 0) return alert('Select a message first');
+    const msgs = messages.filter(m => selectedMessages.includes(m.id));
+    const text = msgs.map(m => m.text).join('\n');
+    navigator.clipboard?.writeText(text).then(() => alert('Copied!'));
+  };
+
+  // ----- Forward selected message -----
+  const forwardSelectedMessage = async () => {
+    if (selectedMessages.length === 0) return alert('Select a message first');
+    alert('Forward to: (Implement contact picker)');
+  };
+
+  // ----- Star selected message -----
+  const starSelectedMessage = async () => {
+    if (selectedMessages.length === 0) return alert('Select a message first');
+    const data = await fetchData();
+    const starred = data.starredMessages || [];
+    for (const id of selectedMessages) {
+      const msg = messages.find(m => m.id === id);
+      if (msg && !starred.find((s: any) => s.id === msg.id)) {
+        starred.push({ ...msg, userId: user.id, starredAt: new Date().toISOString() });
+      }
+    }
+    await saveData({ ...data, starredMessages: starred });
+    alert('Starred!');
+    setSelectMode(false);
+    setSelectedMessages([]);
+  };
+
+  // ----- Save selected message -----
+  const saveSelectedMessage = async () => {
+    if (selectedMessages.length === 0) return alert('Select a message first');
+    const data = await fetchData();
+    const saved = data.savedMessages || [];
+    for (const id of selectedMessages) {
+      const msg = messages.find(m => m.id === id);
+      if (msg && !saved.find((s: any) => s.id === msg.id)) {
+        saved.push({ ...msg, userId: user.id, savedAt: new Date().toISOString() });
+      }
+    }
+    await saveData({ ...data, savedMessages: saved });
+    alert('Saved!');
+    setSelectMode(false);
+    setSelectedMessages([]);
+  };
+
+  // ----- Share to other app -----
+  const shareSelectedMessage = () => {
+    if (selectedMessages.length === 0) return alert('Select a message first');
+    const msgs = messages.filter(m => selectedMessages.includes(m.id));
+    const text = msgs.map(m => m.text).join('\n');
+    if (navigator.share) {
+      navigator.share({ text }).catch(() => {});
+    } else {
+      navigator.clipboard?.writeText(text).then(() => alert('Copied to clipboard!'));
+    }
+  };
+
+  // ----- Edit message (start) -----
+  const startEditMessage = (message: any) => {
+    if (message.senderId !== user?.id) return;
+    setEditingMessageId(message.id);
+    setEditText(message.text);
+  };
+
+  // ----- Edit message (save) -----
+  const saveEditMessage = async () => {
+    if (!editingMessageId || !editText.trim()) return;
+    let key: string;
+    if (isGroup || isChannel) {
+      key = id as string;
+    } else {
+      key = getChatId(user.id, id as string);
+    }
+    const data = await fetchData();
+    const chats = data.chats || {};
+    if (!chats[key]) return;
+    const idx = chats[key].findIndex((m: any) => m.id === editingMessageId);
+    if (idx === -1) return;
+    chats[key][idx].text = editText.trim();
+    chats[key][idx].edited = true;
+    await saveData({ ...data, chats });
+    setEditingMessageId(null);
+    setEditText('');
+    loadMessages();
+  };
+
+  // ----- Toggle voice -----
+  const toggleVoice = () => {
+    setVoiceEnabled(prev => {
+      if (prev) speechSynth.current?.cancel();
+      return !prev;
+    });
+  };
 
   // ----- Navigate to profile -----
   const goToProfile = () => {
@@ -399,14 +559,6 @@ export default function ChatRoom() {
     } else {
       router.push(`/profile/${recipient.id}`);
     }
-  };
-
-  // ----- Toggle voice -----
-  const toggleVoice = () => {
-    setVoiceEnabled(prev => {
-      if (prev) speechSynth.current?.cancel();
-      return !prev;
-    });
   };
 
   if (!recipient) {
@@ -650,4 +802,4 @@ export default function ChatRoom() {
       </div>
     </div>
   );
-  }
+}
