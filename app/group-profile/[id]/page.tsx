@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { fetchData, saveData } from '@/lib/db';
-import { FaArrowLeft, FaUserCircle, FaCog, FaUserPlus, FaUserMinus, FaCheck, FaTimes, FaShare } from 'react-icons/fa';
+import { FaArrowLeft, FaUserCircle, FaCog, FaUserPlus, FaUserMinus, FaCheck, FaTimes, FaShare, FaBell } from 'react-icons/fa';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -15,7 +15,6 @@ export default function GroupProfile() {
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState('');
 
   useEffect(() => {
@@ -27,7 +26,6 @@ export default function GroupProfile() {
         setGroup(found);
         const users = data.users || [];
         setAllUsers(users);
-        // Generate invite link
         const baseUrl = window.location.origin;
         setInviteLink(`${baseUrl}/join-group/${id}`);
       }
@@ -38,7 +36,39 @@ export default function GroupProfile() {
 
   const isAdmin = group?.admins?.includes(user?.id) || false;
   const isCreator = group?.createdBy === user?.id;
+  const isMember = group?.members?.includes(user?.id);
 
+  // ----- Join group -----
+  const joinGroup = async () => {
+    if (!user) return;
+    const data = await fetchData();
+    const groups = data.groups || [];
+    const idx = groups.findIndex((g: any) => g.id === id);
+    if (idx === -1) return;
+    if (!groups[idx].members) groups[idx].members = [];
+    if (!groups[idx].members.includes(user.id)) {
+      groups[idx].members.push(user.id);
+      await saveData({ ...data, groups });
+      setGroup(groups[idx]);
+
+      // ----- Notification: User joined -----
+      const notif = {
+        id: `notif_${Date.now()}_${Math.random()}`,
+        userId: groups[idx].createdBy, // notify creator
+        text: `${user.displayName} joined the group "${groups[idx].name}"`,
+        timestamp: new Date().toISOString(),
+        read: false,
+        type: 'group_join',
+        chatId: id,
+      };
+      const notifData = await fetchData();
+      const notifications = notifData.notifications || [];
+      notifications.push(notif);
+      await saveData({ ...notifData, notifications });
+    }
+  };
+
+  // ----- Add admin -----
   const addAdmin = async (userId: string) => {
     if (!isAdmin) return;
     const data = await fetchData();
@@ -50,9 +80,25 @@ export default function GroupProfile() {
       groups[idx].admins.push(userId);
       await saveData({ ...data, groups });
       setGroup(groups[idx]);
+
+      // ----- Notification: User made admin -----
+      const notif = {
+        id: `notif_${Date.now()}_${Math.random()}`,
+        userId: userId,
+        text: `You were made an admin of the group "${groups[idx].name}"`,
+        timestamp: new Date().toISOString(),
+        read: false,
+        type: 'group_admin',
+        chatId: id,
+      };
+      const notifData = await fetchData();
+      const notifications = notifData.notifications || [];
+      notifications.push(notif);
+      await saveData({ ...notifData, notifications });
     }
   };
 
+  // ----- Remove admin -----
   const removeAdmin = async (userId: string) => {
     if (!isAdmin || userId === group?.createdBy) return;
     const data = await fetchData();
@@ -64,6 +110,7 @@ export default function GroupProfile() {
     setGroup(groups[idx]);
   };
 
+  // ----- Remove member -----
   const removeMember = async (userId: string) => {
     if (!isAdmin) return;
     if (userId === group?.createdBy) return;
@@ -77,6 +124,7 @@ export default function GroupProfile() {
     setGroup(groups[idx]);
   };
 
+  // ----- Toggle group setting -----
   const toggleSetting = async (key: string) => {
     if (!isAdmin) return;
     const data = await fetchData();
@@ -116,12 +164,17 @@ export default function GroupProfile() {
         )}
         <h2 className="text-2xl font-bold text-[var(--text)] mt-2">{group.name}</h2>
         <p className="text-gray-500 text-sm">{group.members?.length || 0} members</p>
+        {!isMember && (
+          <button onClick={joinGroup} className="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 rounded-full text-sm">
+            Join Group
+          </button>
+        )}
         {isAdmin && (
-          <button onClick={() => setShowSettings(true)} className="mt-2 text-blue-500 hover:text-blue-400 text-sm">
+          <button onClick={() => setShowSettings(true)} className="mt-2 ml-2 text-blue-500 hover:text-blue-400 text-sm">
             <FaCog className="inline mr-1" /> Settings
           </button>
         )}
-        <button onClick={shareInvite} className="mt-2 ml-4 bg-green-600 hover:bg-green-700 text-white px-4 py-1 rounded-full text-sm">
+        <button onClick={shareInvite} className="mt-2 ml-2 bg-green-600 hover:bg-green-700 text-white px-4 py-1 rounded-full text-sm">
           <FaShare className="inline mr-1" /> Invite
         </button>
       </div>
@@ -166,7 +219,7 @@ export default function GroupProfile() {
         })}
       </div>
 
-      {/* Settings Modal */}
+      {/* Settings Modal (unchanged) */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center">
           <div className="bg-gray-800 rounded-2xl p-6 max-w-sm w-full">
@@ -206,4 +259,4 @@ export default function GroupProfile() {
       )}
     </div>
   );
-    }
+      }
