@@ -23,6 +23,8 @@ export default function ChatRoom() {
   const { id } = useParams();
   const { user } = useAuth();
   const router = useRouter();
+
+  // ----- State -----
   const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState('');
   const [recipient, setRecipient] = useState<any>(null);
@@ -42,8 +44,14 @@ export default function ChatRoom() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
   const [showStickers, setShowStickers] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState<{ messageId: string | null, show: boolean }>({ messageId: null, show: false });
-  const [showReactionPicker, setShowReactionPicker] = useState<{ messageId: string | null, show: boolean }>({ messageId: null, show: false });
+  const [showDeleteModal, setShowDeleteModal] = useState<{ messageId: string | null; show: boolean }>({
+    messageId: null,
+    show: false,
+  });
+  const [showReactionPicker, setShowReactionPicker] = useState<{ messageId: string | null; show: boolean }>({
+    messageId: null,
+    show: false,
+  });
   const bottomRef = useRef<HTMLDivElement>(null);
   const speechSynth = useRef<SpeechSynthesis | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -51,6 +59,7 @@ export default function ChatRoom() {
   const audioChunksRef = useRef<Blob[]>([]);
   const [isRecording, setIsRecording] = useState(false);
 
+  // ----- Helpers -----
   const getChatId = (a: string, b: string) => [a, b].sort().join('_');
 
   // ----- Text‑to‑speech -----
@@ -58,7 +67,7 @@ export default function ChatRoom() {
     if (!speechSynth.current || !voiceEnabled) return;
     const utterance = new SpeechSynthesisUtterance(text);
     if (recipient?.voice) {
-      utterance.voice = speechSynth.current.getVoices().find(v => v.name === recipient.voice.name) || null;
+      utterance.voice = speechSynth.current.getVoices().find((v) => v.name === recipient.voice.name) || null;
       utterance.lang = recipient.voice.lang || 'en-US';
     }
     utterance.rate = 1;
@@ -72,12 +81,12 @@ export default function ChatRoom() {
     speechSynth.current.speak(utterance);
   };
 
-  // ----- Request microphone permission -----
+  // ----- Microphone permission -----
   const requestMicrophonePermission = async () => {
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true });
       return true;
-    } catch (err) {
+    } catch {
       alert('Please allow microphone access in your browser settings to send voice notes.');
       return false;
     }
@@ -86,6 +95,8 @@ export default function ChatRoom() {
   // ----- Load recipient -----
   useEffect(() => {
     const findRecipient = async () => {
+      if (!user) return; // guard
+
       const ai = await getAIById(id as string);
       if (ai) {
         setRecipient({
@@ -108,6 +119,7 @@ export default function ChatRoom() {
         setSystemPrompt(ai.systemPrompt || 'Never output any internal reasoning.');
         return;
       }
+
       const data = await fetchData();
       const groups = data.groups || [];
       const foundGroup = groups.find((g: any) => g.id === id);
@@ -125,11 +137,11 @@ export default function ChatRoom() {
         });
         setIsGroup(true);
         setIsAI(false);
-        const users = data.users || [];
-        const currentUser = users.find((u: any) => u.id === user?.id);
+        const currentUser = data.users?.find((u: any) => u.id === user.id);
         setBackground(currentUser?.chatBackground || DEFAULT_CHAT_BG);
         return;
       }
+
       const channels = data.channels || [];
       const foundChannel = channels.find((c: any) => c.id === id);
       if (foundChannel) {
@@ -147,11 +159,11 @@ export default function ChatRoom() {
         });
         setIsChannel(true);
         setIsAI(false);
-        const users = data.users || [];
-        const currentUser = users.find((u: any) => u.id === user?.id);
+        const currentUser = data.users?.find((u: any) => u.id === user.id);
         setBackground(currentUser?.chatBackground || DEFAULT_CHAT_BG);
         return;
       }
+
       const users = data.users || [];
       const found = users.find((u: any) => u.id === id);
       if (found) {
@@ -159,7 +171,7 @@ export default function ChatRoom() {
         setIsAI(false);
         setIsGroup(false);
         setIsChannel(false);
-        const currentUser = users.find((u: any) => u.id === user?.id);
+        const currentUser = users.find((u: any) => u.id === user.id);
         setBackground(currentUser?.chatBackground || DEFAULT_CHAT_BG);
       }
     };
@@ -202,8 +214,8 @@ export default function ChatRoom() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          systemPrompt: systemPrompt,
-          userMessage: userMessage,
+          systemPrompt,
+          userMessage,
           temperature,
           maxTokens,
         }),
@@ -225,6 +237,7 @@ export default function ChatRoom() {
     if (!text.trim() && !mediaData) return;
     if (!user || !recipient) return;
 
+    // Permission checks
     if (isGroup) {
       if (recipient.settings?.preventMediaShare && mediaData) {
         alert('Media sharing is disabled in this group.');
@@ -270,7 +283,7 @@ export default function ChatRoom() {
     setText('');
     loadMessages();
 
-    // Notifications (simplified)
+    // Notifications
     if (isGroup || isChannel) {
       const members = recipient.members || [];
       const notifText = `${user.displayName} sent a message in ${recipient.displayName}`;
@@ -362,7 +375,7 @@ export default function ChatRoom() {
           sendMessage(dataUrl, 'audio/webm');
         };
         reader.readAsDataURL(audioBlob);
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach((track) => track.stop());
       };
       mediaRecorder.start();
       setIsRecording(true);
@@ -391,7 +404,11 @@ export default function ChatRoom() {
       } else if (m.mediaType?.startsWith('audio/')) {
         return <audio src={m.media} controls className="w-full max-w-[200px]" />;
       } else {
-        return <a href={m.media} target="_blank" rel="noopener noreferrer" className="text-blue-400 underline">📎 Attachment</a>;
+        return (
+          <a href={m.media} target="_blank" rel="noopener noreferrer" className="text-blue-400 underline">
+            📎 Attachment
+          </a>
+        );
       }
     }
     return m.text;
@@ -448,7 +465,11 @@ export default function ChatRoom() {
     const msg = chats[key][msgIndex];
 
     if (option === 'forEveryone') {
-      const isAdmin = isGroup ? recipient.admins?.includes(user.id) : (isChannel ? recipient.admins?.includes(user.id) : false);
+      const isAdmin = isGroup
+        ? recipient.admins?.includes(user.id)
+        : isChannel
+        ? recipient.admins?.includes(user.id)
+        : false;
       if (!isAdmin) {
         alert('Only admins can delete for everyone.');
         setShowDeleteModal({ messageId: null, show: false });
@@ -470,18 +491,21 @@ export default function ChatRoom() {
     setSelectedMessages([]);
   };
 
-  // ----- Selection mode actions (copy, star, save, share) -----
+  // ----- Selection mode actions -----
   const toggleSelectMessage = (messageId: string) => {
-    setSelectedMessages(prev =>
-      prev.includes(messageId) ? prev.filter(id => id !== messageId) : [...prev, messageId]
+    setSelectedMessages((prev) =>
+      prev.includes(messageId) ? prev.filter((id) => id !== messageId) : [...prev, messageId]
     );
   };
 
-  // ----- Clear all messages (admin only) -----
   const clearAllMessages = async () => {
     if (!user) return;
     if (!confirm('Clear all messages? This cannot be undone.')) return;
-    const isAdmin = isGroup ? recipient.admins?.includes(user.id) : (isChannel ? recipient.admins?.includes(user.id) : false);
+    const isAdmin = isGroup
+      ? recipient.admins?.includes(user.id)
+      : isChannel
+      ? recipient.admins?.includes(user.id)
+      : false;
     if (!isAdmin) {
       alert('Only admins can clear all messages.');
       return;
@@ -502,21 +526,19 @@ export default function ChatRoom() {
     setShowMenu(false);
   };
 
-  // ----- Copy selected message -----
   const copySelectedMessage = () => {
     if (selectedMessages.length === 0) return alert('Select a message first');
-    const msgs = messages.filter(m => selectedMessages.includes(m.id));
-    const text = msgs.map(m => m.text).join('\n');
+    const msgs = messages.filter((m) => selectedMessages.includes(m.id));
+    const text = msgs.map((m) => m.text).join('\n');
     navigator.clipboard?.writeText(text).then(() => alert('Copied!'));
   };
 
-  // ----- Star selected message -----
   const starSelectedMessage = async () => {
     if (selectedMessages.length === 0) return alert('Select a message first');
     const data = await fetchData();
     const starred = data.starredMessages || [];
     for (const id of selectedMessages) {
-      const msg = messages.find(m => m.id === id);
+      const msg = messages.find((m) => m.id === id);
       if (msg && !starred.find((s: any) => s.id === msg.id)) {
         starred.push({ ...msg, userId: user.id, starredAt: new Date().toISOString() });
       }
@@ -527,13 +549,12 @@ export default function ChatRoom() {
     setSelectedMessages([]);
   };
 
-  // ----- Save selected message -----
   const saveSelectedMessage = async () => {
     if (selectedMessages.length === 0) return alert('Select a message first');
     const data = await fetchData();
     const saved = data.savedMessages || [];
     for (const id of selectedMessages) {
-      const msg = messages.find(m => m.id === id);
+      const msg = messages.find((m) => m.id === id);
       if (msg && !saved.find((s: any) => s.id === msg.id)) {
         saved.push({ ...msg, userId: user.id, savedAt: new Date().toISOString() });
       }
@@ -544,11 +565,10 @@ export default function ChatRoom() {
     setSelectedMessages([]);
   };
 
-  // ----- Share selected message -----
   const shareSelectedMessage = () => {
     if (selectedMessages.length === 0) return alert('Select a message first');
-    const msgs = messages.filter(m => selectedMessages.includes(m.id));
-    const text = msgs.map(m => m.text).join('\n');
+    const msgs = messages.filter((m) => selectedMessages.includes(m.id));
+    const text = msgs.map((m) => m.text).join('\n');
     if (navigator.share) {
       navigator.share({ text }).catch(() => {});
     } else {
@@ -586,7 +606,7 @@ export default function ChatRoom() {
 
   // ----- Toggle voice -----
   const toggleVoice = () => {
-    setVoiceEnabled(prev => {
+    setVoiceEnabled((prev) => {
       if (prev) speechSynth.current?.cancel();
       return !prev;
     });
@@ -605,19 +625,30 @@ export default function ChatRoom() {
     }
   };
 
+  // ----- Loading state -----
   if (!recipient) {
     return <div className="flex items-center justify-center h-screen bg-black text-white">Loading...</div>;
   }
 
+  // ----- Render -----
   return (
     <div
       className="flex flex-col h-screen overflow-hidden bg-cover bg-center bg-no-repeat"
-      style={{ backgroundImage: background && !isAI ? `url(${background})` : (isAI ? `url(${background})` : 'none') }}
+      style={{
+        backgroundImage: background && !isAI ? `url(${background})` : isAI ? `url(${background})` : 'none',
+      }}
     >
       {!isAI && background && (
-        <div className="absolute inset-0 bg-cover bg-center opacity-10" style={{ backgroundImage: `url(${background})` }} />
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-10"
+          style={{ backgroundImage: `url(${background})` }}
+        />
       )}
-      <div className={`absolute inset-0 ${background && !isAI ? 'bg-black/40' : (isAI ? 'bg-black/60' : 'bg-black/60')}`} />
+      <div
+        className={`absolute inset-0 ${
+          background && !isAI ? 'bg-black/40' : isAI ? 'bg-black/60' : 'bg-black/60'
+        }`}
+      />
       <div className="relative z-10 flex flex-col h-full overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-3 bg-black/50 backdrop-blur-sm flex-shrink-0">
@@ -630,11 +661,21 @@ export default function ChatRoom() {
               className="flex items-center gap-3 cursor-pointer hover:opacity-80"
             >
               {recipient.photoURL ? (
-                <Image src={recipient.photoURL} alt="Avatar" width={40} height={40} className="w-10 h-10 rounded-full object-cover border-2 border-white" />
+                <Image
+                  src={recipient.photoURL}
+                  alt="Avatar"
+                  width={40}
+                  height={40}
+                  className="w-10 h-10 rounded-full object-cover border-2 border-white"
+                />
               ) : isGroup ? (
-                <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white font-bold text-sm">G</div>
+                <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white font-bold text-sm">
+                  G
+                </div>
               ) : isChannel ? (
-                <div className="w-10 h-10 rounded-full bg-yellow-500 flex items-center justify-center text-white font-bold text-sm">C</div>
+                <div className="w-10 h-10 rounded-full bg-yellow-500 flex items-center justify-center text-white font-bold text-sm">
+                  C
+                </div>
               ) : (
                 <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
                   {recipient.displayName?.[0]?.toUpperCase() || 'U'}
@@ -643,7 +684,13 @@ export default function ChatRoom() {
               <div>
                 <p className="text-white font-bold">{recipient.displayName}</p>
                 <p className="text-gray-300 text-xs">
-                  {isAI ? 'AI Assistant' : isGroup ? `${recipient.members?.length || 0} members` : isChannel ? 'Channel' : `@${recipient.username}`}
+                  {isAI
+                    ? 'AI Assistant'
+                    : isGroup
+                    ? `${recipient.members?.length || 0} members`
+                    : isChannel
+                    ? 'Channel'
+                    : `@${recipient.username}`}
                   {isOfficial && <span className="ml-1 text-blue-400">✓ Verified</span>}
                   {recipient.isCustom && <span className="ml-1 text-green-400">Custom</span>}
                 </p>
@@ -672,7 +719,9 @@ export default function ChatRoom() {
                 {selectMode && (
                   <button
                     onClick={() => toggleSelectMessage(m.id)}
-                    className={`w-5 h-5 rounded border ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-400'} flex items-center justify-center mr-2`}
+                    className={`w-5 h-5 rounded border ${
+                      isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-400'
+                    } flex items-center justify-center mr-2`}
                   >
                     {isSelected && <FaCheck className="text-white text-xs" />}
                   </button>
@@ -712,7 +761,10 @@ export default function ChatRoom() {
                   {Object.keys(reactions).length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1">
                       {Object.entries(reactions).map(([emoji, users]) => (
-                        <span key={emoji} className="bg-gray-800 text-white text-xs px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <span
+                          key={emoji}
+                          className="bg-gray-800 text-white text-xs px-2 py-0.5 rounded-full flex items-center gap-1"
+                        >
                           {emoji} {users.length}
                         </span>
                       ))}
@@ -762,7 +814,7 @@ export default function ChatRoom() {
           <div ref={bottomRef} />
         </div>
 
-        {/* Input (sticky at bottom) */}
+        {/* Input */}
         <div className="sticky bottom-0 bg-black/70 backdrop-blur-sm p-4 flex gap-2 items-center flex-shrink-0 border-t border-gray-700">
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -787,7 +839,9 @@ export default function ChatRoom() {
           </button>
           <button
             onClick={isRecording ? stopRecording : startRecording}
-            className={`text-white hover:text-red-400 ${isRecording ? 'text-red-400 animate-pulse' : ''}`}
+            className={`text-white hover:text-red-400 ${
+              isRecording ? 'text-red-400 animate-pulse' : ''
+            }`}
             title={isRecording ? 'Stop recording' : 'Record voice note'}
           >
             {isRecording ? <FaStop size={20} /> : <FaMicrophone size={20} />}
@@ -800,7 +854,10 @@ export default function ChatRoom() {
             placeholder={isRecording ? '🔴 Recording...' : 'Type a message...'}
             disabled={isRecording}
           />
-          <button onClick={() => sendMessage()} className="bg-blue-600 hover:bg-blue-700 px-6 rounded-xl text-white font-semibold transition flex-shrink-0">
+          <button
+            onClick={() => sendMessage()}
+            className="bg-blue-600 hover:bg-blue-700 px-6 rounded-xl text-white font-semibold transition flex-shrink-0"
+          >
             <FaPaperPlane />
           </button>
         </div>
@@ -891,35 +948,70 @@ export default function ChatRoom() {
         {showMenu && (
           <div className="absolute top-16 right-4 bg-gray-800 rounded-2xl p-4 shadow-xl z-50 w-64">
             <div className="space-y-2">
-              <button onClick={clearAllMessages} className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition">
+              <button
+                onClick={clearAllMessages}
+                className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition"
+              >
                 <FaEraser /> Clear All Messages (Admin)
               </button>
-              <button onClick={() => setSelectMode(!selectMode)} className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition">
+              <button
+                onClick={() => setSelectMode(!selectMode)}
+                className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition"
+              >
                 <FaCheck /> {selectMode ? 'Exit Selection' : 'Select Messages'}
               </button>
               {selectMode && (
                 <>
-                  <button onClick={copySelectedMessage} className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition">
+                  <button
+                    onClick={copySelectedMessage}
+                    className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition"
+                  >
                     <FaCopy /> Copy
                   </button>
-                  <button onClick={starSelectedMessage} className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition">
+                  <button
+                    onClick={starSelectedMessage}
+                    className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition"
+                  >
                     <FaStar /> Star
                   </button>
-                  <button onClick={saveSelectedMessage} className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition">
+                  <button
+                    onClick={saveSelectedMessage}
+                    className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition"
+                  >
                     <FaBookmark /> Save
                   </button>
-                  <button onClick={shareSelectedMessage} className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition">
+                  <button
+                    onClick={shareSelectedMessage}
+                    className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition"
+                  >
                     <FaShareAlt /> Share
                   </button>
                 </>
               )}
-              <button onClick={() => { setShowMenu(false); router.push('/saved-messages'); }} className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition">
+              <button
+                onClick={() => {
+                  setShowMenu(false);
+                  router.push('/saved-messages');
+                }}
+                className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition"
+              >
                 <FaBookmark /> Saved
               </button>
-              <button onClick={() => { setShowMenu(false); router.push('/starred-messages'); }} className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition">
+              <button
+                onClick={() => {
+                  setShowMenu(false);
+                  router.push('/starred-messages');
+                }}
+                className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition"
+              >
                 <FaStar /> Starred
               </button>
-              <button onClick={() => setShowMenu(false)} className="w-full text-red-400 hover:bg-gray-700 p-2 rounded-lg transition">Close</button>
+              <button
+                onClick={() => setShowMenu(false)}
+                className="w-full text-red-400 hover:bg-gray-700 p-2 rounded-lg transition"
+              >
+                Close
+              </button>
             </div>
           </div>
         )}
