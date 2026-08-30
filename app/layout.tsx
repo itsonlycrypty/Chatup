@@ -20,12 +20,14 @@ function AppContent({ children }: { children: React.ReactNode }) {
 
   if (loading || showLoader) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[#1a1a1a]">
-        <div className="text-center">
-          <div className="animate-spin h-16 w-16 border-t-4 border-b-4 border-blue-500 rounded-full mx-auto mb-6"></div>
+      <div className="flex flex-col items-center justify-between h-screen bg-[#1a1a1a] py-12">
+        <div className="flex-1 flex flex-col items-center justify-center">
+          <div className="animate-spin h-16 w-16 border-t-4 border-b-4 border-blue-500 rounded-full mb-6"></div>
           <h1 className="text-3xl font-bold text-white">Chat Up</h1>
-          <p className="text-gray-400 text-sm mt-4">created by <span className="text-blue-400">Crypty</span> &amp; assisted by <span className="text-purple-400">Mole</span></p>
         </div>
+        <p className="text-gray-400 text-sm text-center pb-8">
+          created by <span className="text-blue-400">Crypty</span> &amp; assisted by <span className="text-purple-400">Mole</span>
+        </p>
       </div>
     );
   }
