@@ -23,7 +23,7 @@ export const fetchData = async () => {
       stickerPacks: record.stickerPacks || [],
       starredMessages: record.starredMessages || [],
       savedMessages: record.savedMessages || [],
-      aiFollowers: record.aiFollowers || {}, // AI ID -> array of user IDs
+      aiFollowers: record.aiFollowers || {},
     };
   } catch (e) {
     console.error('Fetch error:', e);
