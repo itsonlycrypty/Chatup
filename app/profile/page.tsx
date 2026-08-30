@@ -79,6 +79,7 @@ export default function Profile() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const bgFileRef = useRef<HTMLInputElement>(null);
 
   const [settings, setSettings] = useState<SettingsType>({
     darkMode: false,
@@ -581,15 +582,45 @@ export default function Profile() {
                 onChange={(e) => setEditData({ ...editData, pin: e.target.value.replace(/\D/g, '').slice(0, 4) })}
               />
             </div>
+
+            {/* Chat Background – image picker */}
             <div>
-              <label className="text-gray-400 text-sm block mb-1">Chat Background (URL)</label>
-              <input
-                className="w-full bg-gray-800 text-white p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Paste image URL for chat background"
-                value={editData.chatBackground || user.chatBackground || ''}
-                onChange={(e) => setEditData({ ...editData, chatBackground: e.target.value })}
-              />
-              <p className="text-gray-500 text-xs mt-1">Leave blank for default pattern</p>
+              <label className="text-gray-400 text-sm block mb-1">Chat Background</label>
+              <div className="flex items-center gap-2">
+                {editData.chatBackgroundPreview || user.chatBackground ? (
+                  <div className="w-16 h-16 rounded border border-gray-600 overflow-hidden flex-shrink-0">
+                    <Image src={editData.chatBackgroundPreview || user.chatBackground} alt="Bg" width={64} height={64} className="object-cover" />
+                  </div>
+                ) : (
+                  <div className="w-16 h-16 rounded border border-gray-600 flex items-center justify-center text-gray-500 text-xs">None</div>
+                )}
+                <label className="cursor-pointer bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-xl text-sm transition">
+                  Choose Image
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          const dataUrl = ev.target?.result as string;
+                          setEditData({ ...editData, chatBackground: dataUrl, chatBackgroundPreview: dataUrl });
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                </label>
+                <button
+                  onClick={() => setEditData({ ...editData, chatBackground: '', chatBackgroundPreview: '' })}
+                  className="text-red-400 hover:text-red-300 text-sm"
+                >
+                  <FaTimes />
+                </button>
+              </div>
+              <p className="text-gray-500 text-xs mt-1">Select an image to use as chat background (non‑AI chats)</p>
             </div>
 
             {/* Privacy section */}
@@ -941,4 +972,4 @@ export default function Profile() {
       )}
     </>
   );
-  }
+                                     }
