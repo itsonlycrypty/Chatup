@@ -9,7 +9,7 @@ import {
   FaMicrophone, FaMicrophoneSlash, FaPaperPlane, FaArrowLeft, FaTrash,
   FaEdit, FaCheck, FaTimes, FaCog, FaEraser, FaFolderMinus, FaVolumeUp, FaVolumeMute,
   FaPaperclip, FaStop, FaEllipsisV, FaCopy,
-  FaShare, FaStar, FaBookmark, FaShareAlt, FaSmile, FaCheckCircle, FaHeart, FaLaugh, FaSadTear, FaAngry, FaSurprise
+  FaShare, FaStar, FaBookmark, FaShareAlt, FaSmile, FaCheckCircle
 } from 'react-icons/fa';
 import StickerPicker from '@/components/StickerPicker';
 
@@ -164,7 +164,7 @@ export default function ChatRoom() {
       }
     };
     findRecipient();
-  }, [id]);
+  }, [id, user]);
 
   // ----- Load messages -----
   const loadMessages = async () => {
@@ -255,7 +255,7 @@ export default function ChatRoom() {
       senderId: user.id,
       text: text.trim() || '',
       timestamp: new Date().toISOString(),
-      reactions: {}, // { emoji: [userId, ...] }
+      reactions: {},
     };
     if (mediaData) {
       if (mediaType === 'sticker') {
@@ -270,8 +270,45 @@ export default function ChatRoom() {
     setText('');
     loadMessages();
 
-    // Notifications (same as before)
-    // ... (keep existing notification code)
+    // Notifications (simplified)
+    if (isGroup || isChannel) {
+      const members = recipient.members || [];
+      const notifText = `${user.displayName} sent a message in ${recipient.displayName}`;
+      for (const memberId of members) {
+        if (memberId !== user.id) {
+          const notif = {
+            id: `notif_${Date.now()}_${Math.random()}`,
+            userId: memberId,
+            text: notifText,
+            timestamp: new Date().toISOString(),
+            read: false,
+            type: 'group_message',
+            chatId: id,
+          };
+          const notifData = await fetchData();
+          const notifications = notifData.notifications || [];
+          notifications.push(notif);
+          await saveData({ ...notifData, notifications });
+        }
+      }
+    } else if (!isAI) {
+      const otherUserId = recipient.id;
+      if (otherUserId !== user.id) {
+        const notif = {
+          id: `notif_${Date.now()}_${Math.random()}`,
+          userId: otherUserId,
+          text: `${user.displayName} sent you a message.`,
+          timestamp: new Date().toISOString(),
+          read: false,
+          type: 'private_message',
+          chatId: id,
+        };
+        const notifData = await fetchData();
+        const notifications = notifData.notifications || [];
+        notifications.push(notif);
+        await saveData({ ...notifData, notifications });
+      }
+    }
 
     if (isAI && !mediaData) {
       setTimeout(async () => {
@@ -411,7 +448,6 @@ export default function ChatRoom() {
     const msg = chats[key][msgIndex];
 
     if (option === 'forEveryone') {
-      // Check if user is admin (for groups/channels) – if not, deny
       const isAdmin = isGroup ? recipient.admins?.includes(user.id) : (isChannel ? recipient.admins?.includes(user.id) : false);
       if (!isAdmin) {
         alert('Only admins can delete for everyone.');
@@ -851,48 +887,43 @@ export default function ChatRoom() {
           </div>
         )}
 
-        {/* Three‑Dot Menu */}
+        {/* Three‑Dot Menu (popup, not full-screen) */}
         {showMenu && (
-          <div className="fixed inset-0 bg-black z-50 flex flex-col">
-            <div className="flex items-center p-4 bg-gray-900 border-b border-gray-700">
-              <button onClick={() => setShowMenu(false)} className="text-white hover:text-gray-300 mr-4">
-                <FaTimes size={24} />
+          <div className="absolute top-16 right-4 bg-gray-800 rounded-2xl p-4 shadow-xl z-50 w-64">
+            <div className="space-y-2">
+              <button onClick={clearAllMessages} className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition">
+                <FaEraser /> Clear All Messages (Admin)
               </button>
-              <h2 className="text-white text-xl font-bold">Chat Options</h2>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              <button onClick={clearAllMessages} className="w-full flex items-center gap-3 bg-gray-800 hover:bg-gray-700 text-white p-3 rounded-xl transition">
-                <FaEraser /> Clear All Messages (Admin only)
-              </button>
-              <button onClick={() => setSelectMode(!selectMode)} className="w-full flex items-center gap-3 bg-gray-800 hover:bg-gray-700 text-white p-3 rounded-xl transition">
-                <FaCheck /> {selectMode ? 'Exit Selection Mode' : 'Select Messages'}
+              <button onClick={() => setSelectMode(!selectMode)} className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition">
+                <FaCheck /> {selectMode ? 'Exit Selection' : 'Select Messages'}
               </button>
               {selectMode && (
                 <>
-                  <button onClick={copySelectedMessage} className="w-full flex items-center gap-3 bg-gray-800 hover:bg-gray-700 text-white p-3 rounded-xl transition">
-                    <FaCopy /> Copy Selected
+                  <button onClick={copySelectedMessage} className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition">
+                    <FaCopy /> Copy
                   </button>
-                  <button onClick={starSelectedMessage} className="w-full flex items-center gap-3 bg-gray-800 hover:bg-gray-700 text-white p-3 rounded-xl transition">
-                    <FaStar /> Star Selected
+                  <button onClick={starSelectedMessage} className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition">
+                    <FaStar /> Star
                   </button>
-                  <button onClick={saveSelectedMessage} className="w-full flex items-center gap-3 bg-gray-800 hover:bg-gray-700 text-white p-3 rounded-xl transition">
-                    <FaBookmark /> Save Selected
+                  <button onClick={saveSelectedMessage} className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition">
+                    <FaBookmark /> Save
                   </button>
-                  <button onClick={shareSelectedMessage} className="w-full flex items-center gap-3 bg-gray-800 hover:bg-gray-700 text-white p-3 rounded-xl transition">
-                    <FaShareAlt /> Share to Other App
+                  <button onClick={shareSelectedMessage} className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition">
+                    <FaShareAlt /> Share
                   </button>
                 </>
               )}
-              <button onClick={() => { setShowMenu(false); router.push('/saved-messages'); }} className="w-full flex items-center gap-3 bg-gray-800 hover:bg-gray-700 text-white p-3 rounded-xl transition">
-                <FaBookmark /> Saved Messages
+              <button onClick={() => { setShowMenu(false); router.push('/saved-messages'); }} className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition">
+                <FaBookmark /> Saved
               </button>
-              <button onClick={() => { setShowMenu(false); router.push('/starred-messages'); }} className="w-full flex items-center gap-3 bg-gray-800 hover:bg-gray-700 text-white p-3 rounded-xl transition">
-                <FaStar /> Starred Messages
+              <button onClick={() => { setShowMenu(false); router.push('/starred-messages'); }} className="w-full flex items-center gap-3 hover:bg-gray-700 p-2 rounded-lg text-white transition">
+                <FaStar /> Starred
               </button>
+              <button onClick={() => setShowMenu(false)} className="w-full text-red-400 hover:bg-gray-700 p-2 rounded-lg transition">Close</button>
             </div>
           </div>
         )}
       </div>
     </div>
   );
-  }
+}
