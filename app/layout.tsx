@@ -20,7 +20,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
 
   if (loading || showLoader) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[#1a1a1a]"> {/* Dark gray background */}
+      <div className="flex items-center justify-center h-screen bg-[#1a1a1a]">
         <div className="text-center">
           <div className="animate-spin h-16 w-16 border-t-4 border-b-4 border-blue-500 rounded-full mx-auto mb-6"></div>
           <h1 className="text-3xl font-bold text-white">Chat Up</h1>
@@ -45,4 +45,4 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </body>
     </html>
   );
-            }
+}
