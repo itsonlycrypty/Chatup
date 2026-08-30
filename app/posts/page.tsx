@@ -5,14 +5,13 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { FaHeart } from 'react-icons/fa';
 
-export default function Gallery() {
+export default function Posts() {
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       const data = await fetchData();
-      // Only user-uploaded posts (not from youtube_bot, not shorts)
       const allPosts = (data.posts || []).filter(
         (p: any) => p.type !== 'short' && p.userId !== 'youtube_bot'
       );
@@ -28,7 +27,7 @@ export default function Gallery() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-black p-4 pb-24">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Gallery</h1>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Posts</h1>
       {posts.length === 0 ? (
         <div className="flex items-center justify-center h-[60vh]">
           <p className="text-gray-500 dark:text-gray-400 text-xl">No Videos yet</p>
@@ -53,4 +52,4 @@ export default function Gallery() {
       )}
     </div>
   );
-        }
+             }
