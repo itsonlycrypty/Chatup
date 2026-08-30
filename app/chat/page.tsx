@@ -22,14 +22,12 @@ export default function ChatList() {
       const data = await fetchData();
       const allStories = data.stories || [];
       const now = new Date().getTime();
-      // Get stories from users the current user follows, plus own stories
       const following = user.following || [];
       const relevantUsers = [...following, user.id];
       const validStories = allStories.filter((s: any) => {
         const expires = new Date(s.expiresAt).getTime();
         return relevantUsers.includes(s.userId) && expires > now;
       });
-      // Sort by timestamp (newest first) and group by userId (show latest per user)
       const storyMap = new Map();
       validStories.forEach((s: any) => {
         if (!storyMap.has(s.userId) || new Date(s.timestamp).getTime() > new Date(storyMap.get(s.userId).timestamp).getTime()) {
@@ -37,7 +35,6 @@ export default function ChatList() {
         }
       });
       const storyList = Array.from(storyMap.values());
-      // Fetch user details for each story
       const users = data.users || [];
       const storyWithUsers = storyList.map((s: any) => {
         const u = users.find((usr: any) => usr.id === s.userId);
@@ -56,7 +53,6 @@ export default function ChatList() {
       const realUsers = data.users || [];
       const others = realUsers.filter((u: any) => u.id !== user.id);
       const allAIs = await getAllAIs();
-      // Add follow status and followers count to AIs
       const aiFollowers = data.aiFollowers || {};
       const aiList = allAIs.map(ai => {
         const followers = aiFollowers[ai.id] || [];
@@ -93,8 +89,6 @@ export default function ChatList() {
         owner: c.owner,
         onlyAdminsCanSend: c.onlyAdminsCanSend || false,
       }));
-      // Add official channel if not exists (will be created separately)
-      // For now, we'll just show existing channels.
       const all = [...others, ...aiList, ...groups, ...channels];
       setItems(all);
       setFiltered(all);
@@ -135,7 +129,6 @@ export default function ChatList() {
         followers: aiFollowers[ai.id] || [],
         isFollowing: (aiFollowers[ai.id] || []).includes(user.id),
       }));
-      // Update items
       setItems(prev => prev.map(item => {
         if (item.isAI && item.id === aiId) {
           const ai = updatedAiList.find(a => a.id === aiId);
@@ -217,14 +210,14 @@ export default function ChatList() {
         </div>
       )}
 
-      {/* Header */}
+      {/* Top Bar */}
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Chats</h1>
         <div className="flex gap-2">
           <button
             onClick={generateInviteLink}
             className="bg-green-600 hover:bg-green-700 text-white p-2 rounded-full transition"
-            title="Invite someone"
+            title="Invite"
           >
             <FaShare size={18} />
           </button>
@@ -351,4 +344,4 @@ export default function ChatList() {
       )}
     </div>
   );
-}
+                                             }
