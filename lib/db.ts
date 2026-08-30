@@ -18,6 +18,9 @@ export const fetchData = async () => {
       groups: record.groups || [],
       channels: record.channels || [],
       groupInvites: record.groupInvites || [],
+      notifications: record.notifications || [],
+      stickers: record.stickers || [], // built‑in + custom stickers
+      stickerPacks: record.stickerPacks || [],
     };
   } catch (e) {
     console.error('Fetch error:', e);
@@ -31,6 +34,9 @@ export const fetchData = async () => {
       groups: [],
       channels: [],
       groupInvites: [],
+      notifications: [],
+      stickers: [],
+      stickerPacks: [],
     };
   }
 };
