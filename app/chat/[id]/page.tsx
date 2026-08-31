@@ -745,10 +745,10 @@ export default function ChatRoom() {
                       {m.edited && <span className="text-xs text-gray-400 ml-1">(edited)</span>}
                     </>
                   )}
-                  {/* Reactions display – FIXED */}
+                  {/* Reactions display – FIXED type error */}
                   {Object.keys(reactions).length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1">
-                      {Object.entries(reactions).map(([emoji, users]) => (
+                      {Object.entries(reactions).map(([emoji, users]: [string, string[]]) => (
                         <span
                           key={emoji}
                           className="bg-gray-800 text-white text-xs px-2 py-0.5 rounded-full flex items-center gap-1"
@@ -1005,4 +1005,4 @@ export default function ChatRoom() {
       </div>
     </div>
   );
-         }
+    }
