@@ -165,6 +165,24 @@ export default function Profile() {
     if (user) loadUserData();
   }, [user]);
 
+  // ----- FIXED: Open edit modal with current user data -----
+  const openEditModal = () => {
+    if (!user) return;
+    setEditData({
+      displayName: user.displayName || '',
+      username: user.username || '',
+      bio: user.bio || '',
+      phone: user.phone || '',
+      email: user.email || '',
+      pin: user.pin || '',
+      photoURL: user.photoURL || '',
+      chatBackground: user.chatBackground || '',
+      chatBackgroundPreview: user.chatBackground || '',
+      privacy: user.privacy || { stories: 'everyone', posts: 'everyone' },
+    });
+    setShowEdit(true);
+  };
+
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -245,9 +263,11 @@ export default function Profile() {
       alert('Username already taken. Please choose another.');
       return;
     }
+    // Update user with all fields from editData
     await updateUser({ ...user, ...editData });
     setShowEdit(false);
-    loadUserData();
+    // Reload user data to reflect changes
+    await loadUserData();
   };
 
   const markAsRead = async (notifId: string) => {
@@ -404,7 +424,7 @@ export default function Profile() {
             <p className="text-gray-400 text-sm">@{username}</p>
             {bio && <p className="text-gray-300 text-sm mt-1">{bio}</p>}
             <button
-              onClick={() => setShowEdit(true)}
+              onClick={openEditModal}  // FIXED: use openEditModal instead of setShowEdit(true)
               className="text-blue-400 text-xs mt-2 hover:text-blue-300"
             >
               <FaEdit className="inline mr-1" /> Edit Profile
@@ -484,7 +504,7 @@ export default function Profile() {
         <FloatingPlusButton />
       </div>
 
-      {/* Edit Modal */}
+      {/* Edit Modal – FIXED: no fallbacks, only editData fields */}
       {showEdit && (
         <div className="fixed inset-0 bg-black z-50 flex flex-col">
           <div className="flex items-center p-4 bg-gray-900 border-b border-gray-700">
@@ -498,8 +518,8 @@ export default function Profile() {
             {/* Profile picture */}
             <div className="flex flex-col items-center">
               <div className="relative w-24 h-24 rounded-full bg-gray-700 overflow-hidden">
-                {editData.photoURL || photoURL ? (
-                  <Image src={editData.photoURL || photoURL} alt="Profile" width={96} height={96} className="w-full h-full object-cover" />
+                {editData.photoURL ? (
+                  <Image src={editData.photoURL} alt="Profile" width={96} height={96} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-4xl bg-gray-600 text-white">
                     {editData.displayName?.[0]?.toUpperCase() || 'U'}
@@ -524,13 +544,13 @@ export default function Profile() {
               </div>
             </div>
 
-            {/* Fields with labels */}
+            {/* Fields – no fallback, just editData.field */}
             <div>
               <label className="text-gray-400 text-sm block mb-1">Name</label>
               <input
                 className="w-full bg-gray-800 text-white p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Display Name"
-                value={editData.displayName || displayName}
+                value={editData.displayName || ''}
                 onChange={(e) => setEditData({ ...editData, displayName: e.target.value })}
               />
             </div>
@@ -539,7 +559,7 @@ export default function Profile() {
               <input
                 className="w-full bg-gray-800 text-white p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Username"
-                value={editData.username || username}
+                value={editData.username || ''}
                 onChange={(e) => setEditData({ ...editData, username: e.target.value })}
               />
             </div>
@@ -549,7 +569,7 @@ export default function Profile() {
                 className="w-full bg-gray-800 text-white p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Bio"
                 rows={3}
-                value={editData.bio || bio}
+                value={editData.bio || ''}
                 onChange={(e) => setEditData({ ...editData, bio: e.target.value })}
               />
             </div>
@@ -558,7 +578,7 @@ export default function Profile() {
               <input
                 className="w-full bg-gray-800 text-white p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Phone Number"
-                value={editData.phone || user.phone || ''}
+                value={editData.phone || ''}
                 onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
               />
             </div>
@@ -567,7 +587,7 @@ export default function Profile() {
               <input
                 className="w-full bg-gray-800 text-white p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Email"
-                value={editData.email || user.email || ''}
+                value={editData.email || ''}
                 onChange={(e) => setEditData({ ...editData, email: e.target.value })}
               />
             </div>
@@ -578,18 +598,18 @@ export default function Profile() {
                 placeholder="4-digit PIN"
                 type="password"
                 maxLength={4}
-                value={editData.pin || user.pin || ''}
+                value={editData.pin || ''}
                 onChange={(e) => setEditData({ ...editData, pin: e.target.value.replace(/\D/g, '').slice(0, 4) })}
               />
             </div>
 
-            {/* Chat Background – image picker */}
+            {/* Chat Background */}
             <div>
               <label className="text-gray-400 text-sm block mb-1">Chat Background</label>
               <div className="flex items-center gap-2">
-                {editData.chatBackgroundPreview || user.chatBackground ? (
+                {editData.chatBackgroundPreview ? (
                   <div className="w-16 h-16 rounded border border-gray-600 overflow-hidden flex-shrink-0">
-                    <Image src={editData.chatBackgroundPreview || user.chatBackground} alt="Bg" width={64} height={64} className="object-cover" />
+                    <Image src={editData.chatBackgroundPreview} alt="Bg" width={64} height={64} className="object-cover" />
                   </div>
                 ) : (
                   <div className="w-16 h-16 rounded border border-gray-600 flex items-center justify-center text-gray-500 text-xs">None</div>
@@ -623,14 +643,14 @@ export default function Profile() {
               <p className="text-gray-500 text-xs mt-1">Select an image to use as chat background (non‑AI chats)</p>
             </div>
 
-            {/* Privacy section */}
+            {/* Privacy */}
             <div className="border-t border-gray-700 pt-4">
               <h3 className="text-white font-semibold mb-2">Privacy</h3>
               <div className="flex justify-between items-center">
                 <span className="text-white">Story Visibility</span>
                 <select
                   className="bg-gray-700 text-white rounded p-1"
-                  value={editData.privacy?.stories || user?.privacy?.stories || 'everyone'}
+                  value={editData.privacy?.stories || 'everyone'}
                   onChange={(e) => setEditData({ ...editData, privacy: { ...editData.privacy, stories: e.target.value } })}
                 >
                   <option value="everyone">Everyone</option>
@@ -643,7 +663,7 @@ export default function Profile() {
                 <span className="text-white">Post Visibility</span>
                 <select
                   className="bg-gray-700 text-white rounded p-1"
-                  value={editData.privacy?.posts || user?.privacy?.posts || 'everyone'}
+                  value={editData.privacy?.posts || 'everyone'}
                   onChange={(e) => setEditData({ ...editData, privacy: { ...editData.privacy, posts: e.target.value } })}
                 >
                   <option value="everyone">Everyone</option>
@@ -676,7 +696,7 @@ export default function Profile() {
         </div>
       )}
 
-      {/* Notifications Modal */}
+      {/* Notifications Modal – unchanged */}
       {showNotifications && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-start justify-center pt-16">
           <div className="bg-gray-800 rounded-2xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
@@ -699,7 +719,7 @@ export default function Profile() {
         </div>
       )}
 
-      {/* Settings Modal */}
+      {/* Settings Modal – unchanged */}
       {showSettings && (
         <div className="fixed inset-0 bg-black z-50 flex flex-col">
           <div className="flex items-center p-4 bg-gray-900 border-b border-gray-700">
@@ -972,4 +992,4 @@ export default function Profile() {
       )}
     </>
   );
-                                     }
+}
