@@ -13,10 +13,7 @@ import {
 } from 'react-icons/fa';
 import StickerPicker from '@/components/StickerPicker';
 
-// Default WhatsApp‑style background
 const DEFAULT_CHAT_BG = 'https://www.transparenttextures.com/patterns/white-diamond.png';
-
-// Predefined reaction emojis
 const REACTION_EMOJIS = ['❤️', '😂', '😮', '😢', '😡', '👍', '👎'];
 
 export default function ChatRoom() {
@@ -24,7 +21,6 @@ export default function ChatRoom() {
   const { user } = useAuth();
   const router = useRouter();
 
-  // ----- State -----
   const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState('');
   const [recipient, setRecipient] = useState<any>(null);
@@ -59,10 +55,8 @@ export default function ChatRoom() {
   const audioChunksRef = useRef<Blob[]>([]);
   const [isRecording, setIsRecording] = useState(false);
 
-  // ----- Helpers -----
   const getChatId = (a: string, b: string) => [a, b].sort().join('_');
 
-  // ----- Text‑to‑speech -----
   const speakText = (text: string) => {
     if (!speechSynth.current || !voiceEnabled) return;
     const utterance = new SpeechSynthesisUtterance(text);
@@ -81,7 +75,6 @@ export default function ChatRoom() {
     speechSynth.current.speak(utterance);
   };
 
-  // ----- Microphone permission -----
   const requestMicrophonePermission = async () => {
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -95,7 +88,7 @@ export default function ChatRoom() {
   // ----- Load recipient -----
   useEffect(() => {
     const findRecipient = async () => {
-      if (!user) return; // guard
+      if (!user) return;
 
       const ai = await getAIById(id as string);
       if (ai) {
@@ -190,7 +183,6 @@ export default function ChatRoom() {
     const data = await fetchData();
     const chats = data.chats || {};
     const msgs = chats[key] || [];
-    // Filter out messages hidden for this user
     const visibleMsgs = msgs.filter((m: any) => !m.hiddenFor?.includes(user.id));
     setMessages(visibleMsgs);
     if (voiceEnabled && isAI && visibleMsgs.length > 0) {
@@ -237,7 +229,6 @@ export default function ChatRoom() {
     if (!text.trim() && !mediaData) return;
     if (!user || !recipient) return;
 
-    // Permission checks
     if (isGroup) {
       if (recipient.settings?.preventMediaShare && mediaData) {
         alert('Media sharing is disabled in this group.');
@@ -477,7 +468,6 @@ export default function ChatRoom() {
       }
       chats[key].splice(msgIndex, 1);
     } else {
-      // Delete for me: hide this message for this user
       if (!msg.hiddenFor) msg.hiddenFor = [];
       if (!msg.hiddenFor.includes(user.id)) {
         msg.hiddenFor.push(user.id);
@@ -625,12 +615,10 @@ export default function ChatRoom() {
     }
   };
 
-  // ----- Loading state -----
   if (!recipient) {
     return <div className="flex items-center justify-center h-screen bg-black text-white">Loading...</div>;
   }
 
-  // ----- Render -----
   return (
     <div
       className="flex flex-col h-screen overflow-hidden bg-cover bg-center bg-no-repeat"
@@ -757,7 +745,7 @@ export default function ChatRoom() {
                       {m.edited && <span className="text-xs text-gray-400 ml-1">(edited)</span>}
                     </>
                   )}
-                  {/* Reactions display */}
+                  {/* Reactions display – FIXED */}
                   {Object.keys(reactions).length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1">
                       {Object.entries(reactions).map(([emoji, users]) => (
@@ -765,14 +753,13 @@ export default function ChatRoom() {
                           key={emoji}
                           className="bg-gray-800 text-white text-xs px-2 py-0.5 rounded-full flex items-center gap-1"
                         >
-                          {emoji} {users.length}
+                          {`${emoji} ${users.length}`}
                         </span>
                       ))}
                     </div>
                   )}
                 </div>
                 <div className="flex items-center gap-3 mt-1">
-                  {/* Reaction button */}
                   <button
                     onClick={() => setShowReactionPicker({ messageId: m.id, show: true })}
                     className="text-gray-400 hover:text-yellow-400 text-sm"
@@ -944,7 +931,7 @@ export default function ChatRoom() {
           </div>
         )}
 
-        {/* Three‑Dot Menu (popup, not full-screen) */}
+        {/* Three‑Dot Menu (popup) */}
         {showMenu && (
           <div className="absolute top-16 right-4 bg-gray-800 rounded-2xl p-4 shadow-xl z-50 w-64">
             <div className="space-y-2">
@@ -1018,4 +1005,4 @@ export default function ChatRoom() {
       </div>
     </div>
   );
-}
+         }
