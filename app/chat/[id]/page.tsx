@@ -14,7 +14,7 @@ import {
 import StickerPicker from '@/components/StickerPicker';
 
 const DEFAULT_CHAT_BG = 'https://www.transparenttextures.com/patterns/white-diamond.png';
-const REACTION_EMOJIS = ['❤️', '😂', '😮', '😢', '😡', '👍', '👎'];
+const REACTION_EMOJIS: string[] = ['❤️', '😂', '😮', '😢', '😡', '👍', '👎'];
 
 export default function ChatRoom() {
   const { id } = useParams();
@@ -745,7 +745,7 @@ export default function ChatRoom() {
                       {m.edited && <span className="text-xs text-gray-400 ml-1">(edited)</span>}
                     </>
                   )}
-                  {/* Reactions display – FIXED with proper type assertion */}
+                  {/* Reactions display – fixed type */}
                   {Object.keys(reactions).length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1">
                       {Object.entries(reactions as Record<string, string[]>).map(([emoji, users]) => (
@@ -860,10 +860,10 @@ export default function ChatRoom() {
           />
         )}
 
-        {/* Reaction Picker */}
+        {/* Reaction Picker – fixed with explicit type for emoji */}
         {showReactionPicker.show && showReactionPicker.messageId && (
           <div className="absolute bottom-24 left-4 bg-gray-800 rounded-2xl p-2 flex gap-2 shadow-lg z-50">
-            {(isChannel ? recipient.reactionEmojis || REACTION_EMOJIS : REACTION_EMOJIS).map((emoji) => (
+            {(isChannel ? recipient.reactionEmojis || REACTION_EMOJIS : REACTION_EMOJIS).map((emoji: string) => (
               <button
                 key={emoji}
                 onClick={() => toggleReaction(showReactionPicker.messageId!, emoji)}
@@ -1005,4 +1005,4 @@ export default function ChatRoom() {
       </div>
     </div>
   );
-}
+    }
