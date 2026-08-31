@@ -3,7 +3,10 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { fetchData, saveData } from '@/lib/db';
-import { FaArrowLeft, FaUserCircle, FaCog, FaUserPlus, FaUserMinus, FaCheck, FaTimes, FaShare, FaEdit, FaTrash } from 'react-icons/fa';
+import {
+  FaArrowLeft, FaUserCircle, FaCog, FaUserPlus, FaUserMinus,
+  FaCheck, FaTimes, FaShare, FaEdit, FaTrash, FaCamera
+} from 'react-icons/fa';
 import Image from 'next/image';
 import Link from 'next/link';
 
