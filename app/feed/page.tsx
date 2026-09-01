@@ -1,8 +1,7 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  FaHeart, FaSearch, FaComment, FaPaperPlane, FaUserPlus, FaUserCheck,
-  FaShare, FaTimes, FaSync, FaTrash, FaVideo, FaUser
+  FaSearch, FaShare, FaTimes, FaSync, FaVideo, FaUser
 } from 'react-icons/fa';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -17,7 +16,6 @@ export default function Feed() {
   const { user, allUsers, followUser } = useAuth();
   const [posts, setPosts] = useState<any[]>([]);
   const [showSearch, setShowSearch] = useState(false);
-  const [commentText, setCommentText] = useState<{ [key: string]: string }>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searchVideos, setSearchVideos] = useState<any[]>([]);
@@ -64,8 +62,6 @@ export default function Feed() {
           media: item.video || item.play || '',
           thumbnail: item.cover || '',
           userId: 'youtube_bot',
-          likes: 0,
-          comments: [],
           timestamp: new Date().toISOString(),
           type: 'post',
         }));
@@ -176,65 +172,18 @@ export default function Feed() {
     setRefreshing(false);
   };
 
-  // Like
-  const like = async (postId: string) => {
-    const data = await fetchData();
-    const posts = data.posts || [];
-    const idx = posts.findIndex((p: any) => p.id === postId);
-    if (idx === -1) return;
-    posts[idx].likes = (posts[idx].likes || 0) + 1;
-    await saveData({ ...data, posts });
-    loadData();
-  };
-
-  const addComment = async (postId: string) => {
-    const text = commentText[postId]?.trim();
-    if (!text || !user) return;
-    const data = await fetchData();
-    const posts = data.posts || [];
-    const idx = posts.findIndex((p: any) => p.id === postId);
-    if (idx === -1) return;
-    if (!posts[idx].comments) posts[idx].comments = [];
-    posts[idx].comments.push({
-      id: Date.now().toString(),
-      userId: user.id,
-      username: user.username,
-      displayName: user.displayName,
-      text,
-      timestamp: new Date().toISOString(),
-    });
-    await saveData({ ...data, posts });
-    setCommentText({ ...commentText, [postId]: '' });
-    loadData();
-  };
-
-  const deleteComment = async (postId: string, commentId: string) => {
-    if (!user) return;
-    const data = await fetchData();
-    const posts = data.posts || [];
-    const idx = posts.findIndex((p: any) => p.id === postId);
-    if (idx === -1) return;
-    const post = posts[idx];
-    if (!post.comments) return;
-    const commentIdx = post.comments.findIndex((c: any) => c.id === commentId);
-    if (commentIdx === -1) return;
-    if (post.comments[commentIdx].userId !== user.id) return;
-    post.comments.splice(commentIdx, 1);
-    await saveData({ ...data, posts });
-    loadData();
-  };
-
+  // Share (kept)
   const sharePost = async (post: any) => {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: post.text || 'Check out this post on Chat Up',
-          text: post.text || 'Check out this post on Chat Up',
+          title: post.text || 'Check out this video on Chat Up',
+          text: post.text || 'Check out this video on Chat Up',
           url: post.media || window.location.href,
         });
       } catch (e) { /* user cancelled */ }
     } else {
-      await navigator.clipboard?.writeText(`${post.text || 'Check out this post'} - ${post.media || ''}`);
+      await navigator.clipboard?.writeText(`${post.text || 'Check out this video'} - ${post.media || ''}`);
       alert('Link copied to clipboard!');
     }
   };
@@ -245,7 +194,7 @@ export default function Feed() {
     return user.following?.includes(userId) || false;
   };
 
-  // Search
+  // Search (unchanged)
   const searchYouTube = async (query: string) => {
     if (!YOUTUBE_API_KEY) return [];
     try {
@@ -296,6 +245,7 @@ export default function Feed() {
     setSearchActiveTab('users');
   };
 
+  // Render post without likes/comments
   const renderPost = (p: any) => {
     const postUser = getUser(p.userId);
     const isFollowingUser = isFollowing(p.userId);
@@ -357,62 +307,14 @@ export default function Feed() {
           )}
         </div>
 
-        {p.text && <div className="px-3 py-1 text-sm text-gray-900 dark:text-white">{p.text}</div>}
+        {p.text && <div className="px-3 py-2 text-sm text-gray-900 dark:text-white">{p.text}</div>}
 
-        <div className="flex items-center gap-6 px-3 py-2 text-gray-600 dark:text-gray-400">
-          <button onClick={() => like(p.id)} className="flex items-center gap-1 hover:text-red-500 transition">
-            <FaHeart className="text-red-500" /> {p.likes || 0}
-          </button>
-          <span className="flex items-center gap-1">
-            <FaComment /> {(p.comments?.length || 0)}
-          </span>
+        {/* Only share button – no likes, no comments */}
+        <div className="flex items-center gap-4 px-3 py-2 text-gray-600 dark:text-gray-400">
           <button onClick={() => sharePost(p)} className="flex items-center gap-1 hover:text-blue-500 transition">
-            <FaShare />
+            <FaShare /> Share
           </button>
         </div>
-
-        {(p.comments?.length || 0) > 0 && (
-          <div className="px-3 pb-2 space-y-1">
-            {p.comments.slice(-3).map((c: any) => {
-              const isOwnComment = user && c.userId === user.id;
-              return (
-                <div key={c.id} className="flex items-center justify-between text-sm">
-                  <div>
-                    <span className="text-blue-500 font-semibold">@{c.username}</span>
-                    <span className="text-gray-700 dark:text-gray-300 ml-2">{c.text}</span>
-                  </div>
-                  {isOwnComment && (
-                    <button
-                      onClick={() => deleteComment(p.id, c.id)}
-                      className="text-gray-400 hover:text-red-500 transition"
-                      title="Delete comment"
-                    >
-                      <FaTrash size={12} />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-            {p.comments.length > 3 && (
-              <p className="text-gray-500 dark:text-gray-400 text-xs">+{p.comments.length - 3} more</p>
-            )}
-          </div>
-        )}
-
-        {user && (
-          <div className="flex items-center gap-2 p-3 border-t border-gray-200 dark:border-gray-800">
-            <input
-              className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white p-2 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Add a comment..."
-              value={commentText[p.id] || ''}
-              onChange={(e) => setCommentText({ ...commentText, [p.id]: e.target.value })}
-              onKeyDown={(e) => e.key === 'Enter' && addComment(p.id)}
-            />
-            <button onClick={() => addComment(p.id)} className="text-blue-500 hover:text-blue-400">
-              <FaPaperPlane />
-            </button>
-          </div>
-        )}
       </div>
     );
   };
@@ -473,7 +375,7 @@ export default function Feed() {
 
       <FloatingPlusButton />
 
-      {/* Search Modal (unchanged) */}
+      {/* Search Modal – unchanged */}
       {showSearch && (
         <div className="fixed inset-0 bg-white dark:bg-black z-50 flex flex-col">
           <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
