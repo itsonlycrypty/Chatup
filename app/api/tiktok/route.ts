@@ -2,12 +2,16 @@ import { NextResponse } from 'next/server';
 
 const YOUTUBE_API_KEY = 'AIzaSyCuIFjoCZn9SQApevaGTSi9xujk4WorsUE';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const res = await fetch(
-      `https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&maxResults=30&key=${YOUTUBE_API_KEY}&regionCode=US&videoDuration=short`
-    );
+    const { searchParams } = new URL(request.url);
+    const pageToken = searchParams.get('pageToken') || '';
 
+    // Build YouTube API URL
+    let url = `https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&maxResults=30&key=${YOUTUBE_API_KEY}&regionCode=US&videoDuration=short`;
+    if (pageToken) url += `&pageToken=${pageToken}`;
+
+    const res = await fetch(url);
     if (!res.ok) {
       const errorText = await res.text();
       console.error('YouTube error:', res.status, errorText);
@@ -20,7 +24,7 @@ export async function GET() {
     const data = await res.json();
 
     if (data.items && data.items.length > 0) {
-      // Shuffle for variety each time
+      // Shuffle for variety within the page
       const shuffled = data.items.sort(() => Math.random() - 0.5);
       const items = shuffled.map((item: any) => ({
         id: `yt_${item.id}`,
@@ -30,7 +34,9 @@ export async function GET() {
         play: `https://www.youtube.com/watch?v=${item.id}`,
         cover: item.snippet.thumbnails.medium.url || '',
       }));
-      return NextResponse.json({ data: items });
+
+      const nextPageToken = data.nextPageToken || null;
+      return NextResponse.json({ data: items, nextPageToken });
     } else {
       return NextResponse.json(
         { error: 'No short videos found' },
@@ -44,4 +50,4 @@ export async function GET() {
       { status: 500 }
     );
   }
-    }
+                                                 }
