@@ -81,6 +81,10 @@ export default function Profile() {
   const fileRef = useRef<HTMLInputElement>(null);
   const bgFileRef = useRef<HTMLInputElement>(null);
 
+  // ---- Generated verification code (for email) ----
+  const [generatedCode, setGeneratedCode] = useState('');
+  const [isCodeSent, setIsCodeSent] = useState(false);
+
   const [settings, setSettings] = useState<SettingsType>({
     darkMode: false,
     language: 'English',
@@ -165,7 +169,7 @@ export default function Profile() {
     if (user) loadUserData();
   }, [user]);
 
-  // ----- FIXED: Open edit modal with current user data -----
+  // ---- Open edit modal ----
   const openEditModal = () => {
     if (!user) return;
     setEditData({
@@ -219,43 +223,133 @@ export default function Profile() {
     reader.readAsDataURL(file);
   };
 
+  // ========== NEW LOGIN / SIGNUP FLOW (email verification) ==========
   const handleLogin = async () => {
+    setError('');
+
+    // Email is now mandatory
+    if (!email.trim()) {
+      setError('Email is required.');
+      return;
+    }
+
+    if (!phone.trim()) {
+      setError('Phone number is required.');
+      return;
+    }
+
+    if (!isLogin && !pin.trim()) {
+      setError('Please set a recovery PIN.');
+      return;
+    }
+
+    // Check if user already exists by email or phone
+    const data = await fetchData();
+    const users = data.users || [];
+    const existingByEmail = users.find((u: any) => u.email === email.trim());
+    const existingByPhone = users.find((u: any) => u.phone === phone.trim());
+
     if (isLogin) {
-      if (phone) {
-        try {
-          await requestVerification(phone);
-          setShowVerification(true);
-        } catch (err: any) {
-          setError(err.message);
+      // LOGIN: accept email+pin OR phone+pin
+      if (existingByEmail) {
+        if (existingByEmail.pin === pin.trim()) {
+          // Login successful - update auth context (mock)
+          await updateUser(existingByEmail);
+          // Reload page to reflect logged-in state
+          window.location.reload();
+          return;
+        } else {
+          setError('Invalid PIN. Try again or use your phone number.');
+          return;
         }
-      } else if (email && pin) {
-        try {
-          await loginWithEmail(email, pin);
-        } catch (err: any) {
-          setError(err.message);
+      } else if (existingByPhone) {
+        if (existingByPhone.pin === pin.trim()) {
+          await updateUser(existingByPhone);
+          window.location.reload();
+          return;
+        } else {
+          setError('Invalid PIN. Try again or use your email.');
+          return;
         }
+      } else {
+        setError('No account found with that email or phone. Please sign up.');
+        return;
       }
     } else {
-      if (!phone) return setError('Phone number required');
-      try {
-        await requestVerification(phone);
-        setShowVerification(true);
-      } catch (err: any) {
-        setError(err.message);
+      // SIGNUP: email + phone + pin must be unique
+      if (existingByEmail) {
+        setError('Email already registered. Please log in.');
+        return;
       }
+      if (existingByPhone) {
+        setError('Phone number already registered. Please log in.');
+        return;
+      }
+
+      // Generate a 6-digit verification code
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      setGeneratedCode(code);
+      setIsCodeSent(true);
+
+      // ----- In production, send this code via email -----
+      // For now, show an alert (or you can use a service like Resend)
+      alert(`Verification code sent to ${email}: ${code}`);
+      console.log(`📧 Verification code for ${email}: ${code}`);
+
+      // Store user data temporarily (session or state) - we'll verify the code next
+      // We'll save it to the DB only after the code is verified
+      setShowVerification(true);
     }
   };
 
+  // ---- Verify the email code and complete signup ----
   const handleVerify = async () => {
-    try {
-      await loginWithPhone(phone, verificationCode, email || undefined, pin || undefined);
-    } catch (err: any) {
-      setError(err.message);
+    if (verificationCode !== generatedCode) {
+      setError('Invalid verification code. Please try again.');
+      return;
     }
+
+    // Code matches – save the new user
+    const data = await fetchData();
+    const users = data.users || [];
+    const newUser = {
+      id: `user_${Date.now()}`,
+      phone: phone.trim(),
+      email: email.trim(),
+      pin: pin.trim(),
+      displayName: phone.trim(), // default name
+      username: `user_${phone.slice(-4)}`,
+      bio: '',
+      photoURL: '',
+      followers: [],
+      following: [],
+      isAdmin: false,
+      isVerified: false,
+      chatBackground: '',
+      privacy: { stories: 'everyone', posts: 'everyone' },
+      createdAt: new Date().toISOString(),
+    };
+    users.push(newUser);
+    await saveData({ ...data, users });
+
+    // Log the user in
+    await updateUser(newUser);
+    setShowVerification(false);
+    setError('');
+    alert('Account created! Welcome to Chat Up.');
+    window.location.reload();
   };
 
+  // ---- (Optional) Resend code ----
+  const resendCode = () => {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    setGeneratedCode(code);
+    alert(`New code sent to ${email}: ${code}`);
+    console.log(`📧 New code for ${email}: ${code}`);
+  };
+
+  // ---- Keep existing functions for editing, etc. ----
   const saveEdit = async () => {
-    // Check username uniqueness
     const data = await fetchData();
     const users = data.users || [];
     const existing = users.find((u: any) => u.username === editData.username && u.id !== user.id);
@@ -263,10 +357,8 @@ export default function Profile() {
       alert('Username already taken. Please choose another.');
       return;
     }
-    // Update user with all fields from editData
     await updateUser({ ...user, ...editData });
     setShowEdit(false);
-    // Reload user data to reflect changes
     await loadUserData();
   };
 
@@ -289,11 +381,13 @@ export default function Profile() {
     );
   }
 
+  // ---- If user is not logged in, show login/signup form ----
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--bg)] p-6">
         <div className="w-full max-w-sm bg-[var(--card-bg)] rounded-3xl p-8 border border-[var(--border)]">
           <h1 className="text-4xl font-bold text-center text-[var(--text)] mb-8">Chat Up</h1>
+
           {!showVerification ? (
             <>
               <div className="relative mb-4">
@@ -307,7 +401,7 @@ export default function Profile() {
               <div className="relative mb-4">
                 <input
                   className="w-full bg-gray-700/50 text-[var(--text)] p-3 rounded-xl"
-                  placeholder="Email (optional)"
+                  placeholder="Email (required)"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
@@ -315,7 +409,7 @@ export default function Profile() {
               <div className="relative mb-4">
                 <input
                   className="w-full bg-gray-700/50 text-[var(--text)] p-3 rounded-xl"
-                  placeholder={isLogin ? 'PIN (optional)' : 'Create PIN (optional)'}
+                  placeholder={isLogin ? 'Recovery PIN' : 'Create Recovery PIN'}
                   type={showPin ? 'text' : 'password'}
                   maxLength={4}
                   value={pin}
@@ -347,7 +441,9 @@ export default function Profile() {
             </>
           ) : (
             <>
-              <p className="text-center text-[var(--text)] mb-4">We sent a code to {phone}</p>
+              <p className="text-center text-[var(--text)] mb-4">
+                We sent a 6‑digit code to <strong>{email}</strong>
+              </p>
               <input
                 className="w-full bg-gray-700/50 text-[var(--text)] p-3 rounded-xl mb-4"
                 placeholder="Verification Code"
@@ -359,7 +455,22 @@ export default function Profile() {
                 onClick={handleVerify}
                 className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl mt-4 transition"
               >
-                Verify
+                Verify & Create Account
+              </button>
+              <button
+                onClick={resendCode}
+                className="w-full text-blue-400 hover:text-blue-300 text-sm mt-2"
+              >
+                Resend Code
+              </button>
+              <button
+                onClick={() => {
+                  setShowVerification(false);
+                  setError('');
+                }}
+                className="w-full text-gray-400 hover:text-gray-300 text-sm mt-2"
+              >
+                ← Back
               </button>
             </>
           )}
@@ -368,6 +479,7 @@ export default function Profile() {
     );
   }
 
+  // ---- LOGGED IN: Profile UI (unchanged from previous version) ----
   const isCrypty = user.username === 'Onlycrypty' || user.username === 'crypty' || user.email === 'wmax8808@gmail.com';
 
   return (
@@ -424,7 +536,7 @@ export default function Profile() {
             <p className="text-gray-400 text-sm">@{username}</p>
             {bio && <p className="text-gray-300 text-sm mt-1">{bio}</p>}
             <button
-              onClick={openEditModal}  // FIXED: use openEditModal instead of setShowEdit(true)
+              onClick={openEditModal}
               className="text-blue-400 text-xs mt-2 hover:text-blue-300"
             >
               <FaEdit className="inline mr-1" /> Edit Profile
@@ -504,7 +616,7 @@ export default function Profile() {
         <FloatingPlusButton />
       </div>
 
-      {/* Edit Modal – FIXED: no fallbacks, only editData fields */}
+      {/* Edit Modal (unchanged) */}
       {showEdit && (
         <div className="fixed inset-0 bg-black z-50 flex flex-col">
           <div className="flex items-center p-4 bg-gray-900 border-b border-gray-700">
@@ -515,7 +627,6 @@ export default function Profile() {
             <button onClick={saveEdit} className="ml-auto bg-blue-600 text-white px-4 py-1 rounded-full text-sm">Save</button>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {/* Profile picture */}
             <div className="flex flex-col items-center">
               <div className="relative w-24 h-24 rounded-full bg-gray-700 overflow-hidden">
                 {editData.photoURL ? (
@@ -544,7 +655,6 @@ export default function Profile() {
               </div>
             </div>
 
-            {/* Fields – no fallback, just editData.field */}
             <div>
               <label className="text-gray-400 text-sm block mb-1">Name</label>
               <input
@@ -592,7 +702,7 @@ export default function Profile() {
               />
             </div>
             <div>
-              <label className="text-gray-400 text-sm block mb-1">PIN (4 digits)</label>
+              <label className="text-gray-400 text-sm block mb-1">Recovery PIN (4 digits)</label>
               <input
                 className="w-full bg-gray-800 text-white p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="4-digit PIN"
@@ -603,7 +713,6 @@ export default function Profile() {
               />
             </div>
 
-            {/* Chat Background */}
             <div>
               <label className="text-gray-400 text-sm block mb-1">Chat Background</label>
               <div className="flex items-center gap-2">
@@ -640,10 +749,8 @@ export default function Profile() {
                   <FaTimes />
                 </button>
               </div>
-              <p className="text-gray-500 text-xs mt-1">Select an image to use as chat background (non‑AI chats)</p>
             </div>
 
-            {/* Privacy */}
             <div className="border-t border-gray-700 pt-4">
               <h3 className="text-white font-semibold mb-2">Privacy</h3>
               <div className="flex justify-between items-center">
@@ -696,7 +803,7 @@ export default function Profile() {
         </div>
       )}
 
-      {/* Notifications Modal – unchanged */}
+      {/* Notifications Modal */}
       {showNotifications && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-start justify-center pt-16">
           <div className="bg-gray-800 rounded-2xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
@@ -719,7 +826,7 @@ export default function Profile() {
         </div>
       )}
 
-      {/* Settings Modal – unchanged */}
+      {/* Settings Modal (unchanged) */}
       {showSettings && (
         <div className="fixed inset-0 bg-black z-50 flex flex-col">
           <div className="flex items-center p-4 bg-gray-900 border-b border-gray-700">
@@ -729,7 +836,6 @@ export default function Profile() {
             <h2 className="text-white text-xl font-bold">Settings</h2>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {/* Settings toggles (same as before) */}
             <div className="flex justify-between items-center border-b border-gray-700 pb-2">
               <span className="text-white">Dark Mode</span>
               <button
@@ -992,4 +1098,4 @@ export default function Profile() {
       )}
     </>
   );
-}
+  }
