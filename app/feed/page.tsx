@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   FaHeart, FaSearch, FaComment, FaPaperPlane, FaUserPlus, FaUserCheck,
   FaShare, FaTimes, FaSync, FaTrash, FaVideo, FaUser
@@ -24,10 +24,16 @@ export default function Feed() {
   const [searching, setSearching] = useState(false);
   const [searchActiveTab, setSearchActiveTab] = useState<'users' | 'videos'>('users');
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const hasFetched = useRef(false);
 
+  // Load existing posts from DB
   const loadData = async () => {
     const data = await fetchData();
     const homePosts = (data.posts || []).filter((p: any) => p.type !== 'short');
@@ -37,11 +43,14 @@ export default function Feed() {
     setPosts(sortedHome);
   };
 
-  const fetchVideos = async () => {
-    setLoading(true);
+  // Fetch videos from API using pageToken
+  const fetchVideos = async (token: string | null = null) => {
     setError(null);
     try {
-      const res = await fetch('/api/tiktok');
+      const url = token
+        ? `/api/tiktok?pageToken=${encodeURIComponent(token)}`
+        : '/api/tiktok';
+      const res = await fetch(url);
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || 'API error');
@@ -53,45 +62,102 @@ export default function Feed() {
           id: `yt_${item.id}`,
           text: item.title || item.desc || '',
           media: item.video || item.play || '',
+          thumbnail: item.cover || '',
           userId: 'youtube_bot',
           likes: 0,
           comments: [],
           timestamp: new Date().toISOString(),
           type: 'post',
         }));
+
+        const existingIds = new Set(posts.map((p) => p.id));
+        const uniqueNew = newPosts.filter((p: any) => !existingIds.has(p.id));
+
+        if (uniqueNew.length === 0) {
+          setHasMore(false);
+          return;
+        }
+
+        setPosts((prev) => [...prev, ...uniqueNew]);
+
         const binData = await fetchData();
-        let existingPosts = binData.posts || [];
-        existingPosts = existingPosts.filter((p: any) => p.userId !== 'youtube_bot');
-        const allPosts = [...newPosts, ...existingPosts];
-        await saveData({ ...binData, posts: allPosts });
-        await loadData();
-        console.log(`✅ Refreshed feed: ${newPosts.length} videos`);
+        let allPosts = binData.posts || [];
+        allPosts = allPosts.filter((p: any) => p.userId !== 'youtube_bot');
+        const allYtPosts = posts.concat(uniqueNew).filter((p: any) => p.userId === 'youtube_bot');
+        const merged = [...allPosts, ...allYtPosts];
+        await saveData({ ...binData, posts: merged });
+
+        setNextPageToken(data.nextPageToken || null);
+        setHasMore(!!data.nextPageToken);
       } else {
-        setError('No videos found.');
+        setHasMore(false);
       }
     } catch (err: any) {
       console.error('Failed to fetch:', err.message);
       setError(err.message || 'Failed to load videos.');
     }
+  };
+
+  // Initial load
+  const initialLoad = async () => {
+    setLoading(true);
+    await loadData();
+    if (!hasFetched.current) {
+      hasFetched.current = true;
+      await fetchVideos(null);
+    }
     setLoading(false);
   };
 
+  // Load more
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore || !nextPageToken) return;
+    setLoadingMore(true);
+    await fetchVideos(nextPageToken);
+    setLoadingMore(false);
+  }, [nextPageToken, hasMore, loadingMore]);
+
+  // IntersectionObserver
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+    if (observerRef.current) observerRef.current.disconnect();
+
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loading && !loadingMore && hasMore) {
+          loadMore();
+        }
+      },
+      { rootMargin: '200px', threshold: 0.1 }
+    );
+
+    observerRef.current.observe(sentinelRef.current);
+
+    return () => {
+      if (observerRef.current) observerRef.current.disconnect();
+    };
+  }, [loadMore, loading, loadingMore, hasMore]);
+
+  // Auto-refresh and initial load
   useEffect(() => {
     const init = async () => {
-      await loadData();
-      if (!hasFetched.current) {
-        hasFetched.current = true;
-        await fetchVideos();
-      }
+      await initialLoad();
     };
     init();
+
     const handleVisibilityChange = () => {
-      if (!document.hidden) fetchVideos();
+      if (!document.hidden && !loading && !loadingMore) {
+        fetchVideos(null);
+      }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
+
     const interval = setInterval(() => {
-      if (!document.hidden) fetchVideos();
+      if (!document.hidden && !loading && !loadingMore) {
+        fetchVideos(null);
+      }
     }, 5 * 60 * 1000);
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(interval);
@@ -100,10 +166,17 @@ export default function Feed() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchVideos();
+    setNextPageToken(null);
+    setHasMore(true);
+    const binData = await fetchData();
+    const userPosts = (binData.posts || []).filter((p: any) => p.userId !== 'youtube_bot');
+    await saveData({ ...binData, posts: userPosts });
+    setPosts(userPosts);
+    await fetchVideos(null);
     setRefreshing(false);
   };
 
+  // Like
   const like = async (postId: string) => {
     const data = await fetchData();
     const posts = data.posts || [];
@@ -172,7 +245,7 @@ export default function Feed() {
     return user.following?.includes(userId) || false;
   };
 
-  // ----- Search -----
+  // Search
   const searchYouTube = async (query: string) => {
     if (!YOUTUBE_API_KEY) return [];
     try {
@@ -202,7 +275,6 @@ export default function Feed() {
       return;
     }
     setSearching(true);
-    // Search users
     const data = await fetchData();
     const users = data.users || [];
     const filteredUsers = users.filter((u: any) =>
@@ -211,7 +283,6 @@ export default function Feed() {
       u.email?.toLowerCase().includes(query.toLowerCase())
     );
     setSearchResults(filteredUsers);
-    // Search videos
     const videos = await searchYouTube(query);
     setSearchVideos(videos);
     setSearching(false);
@@ -267,15 +338,22 @@ export default function Feed() {
           )}
         </div>
 
-        <div className="w-full bg-black">
+        <div className="w-full bg-black relative">
           {p.media && p.media.startsWith('data:image') && (
             <Image src={p.media} alt="Post" width={400} height={400} className="w-full h-auto object-cover" />
           )}
           {p.media && p.media.startsWith('data:video') && (
-            <video src={p.media} controls className="w-full h-auto object-cover" />
+            <video
+              src={p.media}
+              controls
+              playsInline
+              preload="metadata"
+              className="w-full h-auto object-cover"
+              poster={p.thumbnail || ''}
+            />
           )}
           {p.media && p.media.startsWith('http') && !p.media.startsWith('data:') && (
-            <VideoEmbed url={p.media} />
+            <VideoEmbed url={p.media} thumbnail={p.thumbnail} />
           )}
         </div>
 
@@ -346,7 +424,7 @@ export default function Feed() {
         <div className="flex items-center gap-3">
           <button
             onClick={handleRefresh}
-            disabled={refreshing || loading}
+            disabled={refreshing || loading || loadingMore}
             className="text-gray-600 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition disabled:opacity-50"
           >
             <FaSync className={refreshing || loading ? 'animate-spin' : ''} size={20} />
@@ -369,7 +447,7 @@ export default function Feed() {
           <div className="text-center">
             <div className="text-red-400 text-5xl mb-4">📹</div>
             <p className="text-gray-500 dark:text-gray-400 mb-4">{error}</p>
-            <button onClick={fetchVideos} className="bg-blue-600 px-6 py-2 rounded-full text-white">Retry</button>
+            <button onClick={() => fetchVideos(null)} className="bg-blue-600 px-6 py-2 rounded-full text-white">Retry</button>
           </div>
         </div>
       ) : posts.length === 0 ? (
@@ -382,12 +460,20 @@ export default function Feed() {
       ) : (
         <div className="max-w-md mx-auto p-2">
           {posts.map((p) => renderPost(p))}
+          <div ref={sentinelRef} className="h-10 flex items-center justify-center">
+            {loadingMore && (
+              <div className="animate-spin h-6 w-6 border-t-2 border-b-2 border-blue-500 rounded-full" />
+            )}
+            {!hasMore && !loadingMore && (
+              <p className="text-xs text-gray-400 dark:text-gray-500">No more videos</p>
+            )}
+          </div>
         </div>
       )}
 
       <FloatingPlusButton />
 
-      {/* Full‑screen Search Modal with Users & Videos tabs */}
+      {/* Search Modal (unchanged) */}
       {showSearch && (
         <div className="fixed inset-0 bg-white dark:bg-black z-50 flex flex-col">
           <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
@@ -408,7 +494,6 @@ export default function Feed() {
                 autoFocus
               />
             </div>
-            {/* Tabs */}
             <div className="flex gap-2 mb-4">
               <button
                 onClick={() => setSearchActiveTab('users')}
@@ -427,7 +512,6 @@ export default function Feed() {
                 <FaVideo className="inline mr-1" /> Videos
               </button>
             </div>
-            {/* Suggestions */}
             {searchQuery.trim() && !searching && (
               <div className="mb-4">
                 <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">Suggestions</div>
@@ -474,7 +558,6 @@ export default function Feed() {
                 ))}
               </div>
             )}
-            {/* Full results */}
             {searching ? (
               <p className="text-gray-500 dark:text-gray-400 text-center">Searching...</p>
             ) : searchActiveTab === 'users' ? (
@@ -524,4 +607,4 @@ export default function Feed() {
       )}
     </div>
   );
-}
+      }
