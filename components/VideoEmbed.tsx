@@ -1,10 +1,11 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 
-export default function VideoEmbed({ url }: { url: string }) {
+export default function VideoEmbed({ url, thumbnail }: { url: string; thumbnail?: string }) {
   const [embedUrl, setEmbedUrl] = useState<string | null>(null);
   const [type, setType] = useState<'youtube' | 'direct' | 'image' | 'unknown'>('unknown');
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     if (!url) return;
@@ -20,7 +21,7 @@ export default function VideoEmbed({ url }: { url: string }) {
       } else {
         videoId = url.split('/').pop() || '';
       }
-      setEmbedUrl(`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`);
+      setEmbedUrl(`https://www.youtube.com/embed/${videoId}?autoplay=0&rel=0`);
     }
     // Direct video
     else if (url.match(/\.(mp4|webm|mov|avi)$/i) || url.includes('mov_bbb.mp4')) {
@@ -38,6 +39,28 @@ export default function VideoEmbed({ url }: { url: string }) {
     }
   }, [url]);
 
+  // Lazy load: only load video when it's in viewport
+  useEffect(() => {
+    if (type !== 'direct' || !videoRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const video = entry.target as HTMLVideoElement;
+            if (video.dataset.src) {
+              video.src = video.dataset.src;
+              video.load();
+            }
+            observer.disconnect();
+          }
+        });
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(videoRef.current);
+    return () => observer.disconnect();
+  }, [type]);
+
   if (type === 'youtube') {
     return (
       <div className="aspect-video bg-black w-full h-full">
@@ -45,7 +68,8 @@ export default function VideoEmbed({ url }: { url: string }) {
           src={embedUrl || ''}
           className="w-full h-full"
           allowFullScreen
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          loading="lazy"
         />
       </div>
     );
@@ -55,11 +79,13 @@ export default function VideoEmbed({ url }: { url: string }) {
     return (
       <div className="w-full h-full bg-black flex items-center justify-center">
         <video
-          src={embedUrl || ''}
+          ref={videoRef}
+          data-src={embedUrl || ''}
           className="w-full h-full object-contain"
           controls
-          autoPlay
           playsInline
+          preload="metadata"
+          poster={thumbnail || ''}
           loop
         />
       </div>
@@ -79,4 +105,4 @@ export default function VideoEmbed({ url }: { url: string }) {
       <span>Video not available</span>
     </div>
   );
-    }
+                 }
