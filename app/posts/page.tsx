@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { fetchData, saveData } from '@/lib/db';
 import Image from 'next/image';
 import Link from 'next/link';
-import { FaHeart, FaComment, FaShare, FaPlay } from 'react-icons/fa';
+import { FaHeart, FaComment, FaShare } from 'react-icons/fa';
 import VideoEmbed from '@/components/VideoEmbed';
 
 export default function Posts() {
@@ -20,7 +20,6 @@ export default function Posts() {
   // Load shorts from DB
   const loadShorts = async () => {
     const data = await fetchData();
-    // Get only youtube_bot posts (shorts)
     const shorts = (data.posts || []).filter((p: any) => p.userId === 'youtube_bot');
     const sorted = shorts.sort((a: any, b: any) =>
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
@@ -28,7 +27,7 @@ export default function Posts() {
     setPosts(sorted);
   };
 
-  // Fetch more shorts from API
+  // Fetch more shorts from TikTok API
   const fetchShorts = async (token: string | null = null) => {
     try {
       const url = token
@@ -40,7 +39,7 @@ export default function Posts() {
       if (data.error) throw new Error(data.error);
       if (data.data && data.data.length > 0) {
         const newPosts = data.data.map((item: any) => ({
-          id: `yt_${item.id}`,
+          id: `tt_${item.id}`,
           text: item.title || item.desc || '',
           media: item.video || item.play || '',
           thumbnail: item.cover || '',
@@ -59,7 +58,6 @@ export default function Posts() {
 
         setPosts((prev) => [...prev, ...uniqueNew]);
 
-        // Save to DB
         const binData = await fetchData();
         let allPosts = binData.posts || [];
         allPosts = allPosts.filter((p: any) => p.userId !== 'youtube_bot');
@@ -150,7 +148,6 @@ export default function Posts() {
                     No video
                   </div>
                 )}
-                {/* Loading spinner (will be shown while video buffers) – we handle it inside VideoEmbed */}
               </div>
               {/* Text & actions */}
               <div className="p-3">
@@ -182,4 +179,4 @@ export default function Posts() {
       )}
     </div>
   );
-          }
+                               }
