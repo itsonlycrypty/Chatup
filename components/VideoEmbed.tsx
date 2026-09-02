@@ -5,10 +5,12 @@ import Image from 'next/image';
 export default function VideoEmbed({ url, thumbnail }: { url: string; thumbnail?: string }) {
   const [embedUrl, setEmbedUrl] = useState<string | null>(null);
   const [type, setType] = useState<'youtube' | 'direct' | 'image' | 'unknown'>('unknown');
+  const [loading, setLoading] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     if (!url) return;
+    setLoading(true);
     
     // YouTube
     if (url.includes('youtube.com/watch') || url.includes('youtu.be') || url.includes('youtube.com/shorts/')) {
@@ -21,7 +23,8 @@ export default function VideoEmbed({ url, thumbnail }: { url: string; thumbnail?
       } else {
         videoId = url.split('/').pop() || '';
       }
-      setEmbedUrl(`https://www.youtube.com/embed/${videoId}?autoplay=0&rel=0`);
+      setEmbedUrl(`https://www.youtube.com/embed/${videoId}?autoplay=0&rel=0&enablejsapi=1`);
+      // YouTube iframe will trigger 'load' event
     }
     // Direct video
     else if (url.match(/\.(mp4|webm|mov|avi)$/i) || url.includes('mov_bbb.mp4')) {
@@ -32,14 +35,16 @@ export default function VideoEmbed({ url, thumbnail }: { url: string; thumbnail?
     else if (url.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i)) {
       setType('image');
       setEmbedUrl(url);
+      setLoading(false);
     }
     else {
       setType('unknown');
       setEmbedUrl(url);
+      setLoading(false);
     }
   }, [url]);
 
-  // Lazy load: only load video when it's in viewport
+  // Lazy load for direct video
   useEffect(() => {
     if (type !== 'direct' || !videoRef.current) return;
     const observer = new IntersectionObserver(
@@ -50,6 +55,9 @@ export default function VideoEmbed({ url, thumbnail }: { url: string; thumbnail?
             if (video.dataset.src) {
               video.src = video.dataset.src;
               video.load();
+              // Once loaded, hide loading spinner
+              video.oncanplay = () => setLoading(false);
+              video.onerror = () => setLoading(false);
             }
             observer.disconnect();
           }
@@ -63,13 +71,19 @@ export default function VideoEmbed({ url, thumbnail }: { url: string; thumbnail?
 
   if (type === 'youtube') {
     return (
-      <div className="aspect-video bg-black w-full h-full">
+      <div className="relative w-full h-full">
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black z-10">
+            <div className="animate-spin h-10 w-10 border-t-4 border-b-4 border-blue-500 rounded-full" />
+          </div>
+        )}
         <iframe
           src={embedUrl || ''}
           className="w-full h-full"
           allowFullScreen
           allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           loading="lazy"
+          onLoad={() => setLoading(false)}
         />
       </div>
     );
@@ -77,7 +91,12 @@ export default function VideoEmbed({ url, thumbnail }: { url: string; thumbnail?
 
   if (type === 'direct') {
     return (
-      <div className="w-full h-full bg-black flex items-center justify-center">
+      <div className="relative w-full h-full bg-black flex items-center justify-center">
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black z-10">
+            <div className="animate-spin h-10 w-10 border-t-4 border-b-4 border-blue-500 rounded-full" />
+          </div>
+        )}
         <video
           ref={videoRef}
           data-src={embedUrl || ''}
@@ -87,6 +106,8 @@ export default function VideoEmbed({ url, thumbnail }: { url: string; thumbnail?
           preload="metadata"
           poster={thumbnail || ''}
           loop
+          onLoadedData={() => setLoading(false)}
+          onError={() => setLoading(false)}
         />
       </div>
     );
@@ -105,4 +126,4 @@ export default function VideoEmbed({ url, thumbnail }: { url: string; thumbnail?
       <span>Video not available</span>
     </div>
   );
-                 }
+  }
