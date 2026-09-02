@@ -172,7 +172,7 @@ export default function Feed() {
     setRefreshing(false);
   };
 
-  // Share (kept)
+  // Share
   const sharePost = async (post: any) => {
     if (navigator.share) {
       try {
@@ -194,7 +194,7 @@ export default function Feed() {
     return user.following?.includes(userId) || false;
   };
 
-  // Search (unchanged)
+  // Search
   const searchYouTube = async (query: string) => {
     if (!YOUTUBE_API_KEY) return [];
     try {
@@ -267,7 +267,7 @@ export default function Feed() {
             )}
             <div>
               <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                {p.userId === 'youtube_bot' ? 'Chat Up Shorts' : (postUser?.displayName || 'Unknown')}
+                {p.userId === 'youtube_bot' ? 'Chat Up Videos' : (postUser?.displayName || 'Unknown')}
                 {postUser?.isAdmin && <span className="ml-1 text-yellow-400 text-xs">⭐</span>}
                 {postUser?.isVerified && <span className="ml-1 text-blue-500 text-xs">✓</span>}
               </p>
@@ -309,7 +309,7 @@ export default function Feed() {
 
         {p.text && <div className="px-3 py-2 text-sm text-gray-900 dark:text-white">{p.text}</div>}
 
-        {/* Only share button – no likes, no comments */}
+        {/* Only share button */}
         <div className="flex items-center gap-4 px-3 py-2 text-gray-600 dark:text-gray-400">
           <button onClick={() => sharePost(p)} className="flex items-center gap-1 hover:text-blue-500 transition">
             <FaShare /> Share
@@ -509,4 +509,4 @@ export default function Feed() {
       )}
     </div>
   );
-      }
+  }
