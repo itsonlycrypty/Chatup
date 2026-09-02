@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { fetchData, saveData } from '@/lib/db';
 import Image from 'next/image';
 import Link from 'next/link';
-import { FaHeart, FaComment, FaShare } from 'react-icons/fa';
+import { FaHeart, FaComment, FaShare, FaPlay } from 'react-icons/fa';
 import VideoEmbed from '@/components/VideoEmbed';
 
 export default function Posts() {
@@ -17,31 +17,25 @@ export default function Posts() {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const hasFetched = useRef(false);
 
-  // Load user posts + shorts from DB
-  const loadUserPosts = async () => {
+  // Load shorts from DB
+  const loadShorts = async () => {
     const data = await fetchData();
-    // Include both user posts and shorts from youtube_bot
-    const allPosts = (data.posts || []).filter(
-      (p: any) => p.type !== 'short' // Keep all types except 'short' (if you have that label)
-    );
-    // Sort by timestamp
-    const sorted = allPosts.sort((a: any, b: any) =>
+    // Get only youtube_bot posts (shorts)
+    const shorts = (data.posts || []).filter((p: any) => p.userId === 'youtube_bot');
+    const sorted = shorts.sort((a: any, b: any) =>
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
     setPosts(sorted);
   };
 
-  // Fetch shorts from TikTok/YouTube API
+  // Fetch more shorts from API
   const fetchShorts = async (token: string | null = null) => {
     try {
       const url = token
         ? `/api/tiktok?pageToken=${encodeURIComponent(token)}`
         : '/api/tiktok';
       const res = await fetch(url);
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'API error');
-      }
+      if (!res.ok) throw new Error('API error');
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       if (data.data && data.data.length > 0) {
@@ -54,30 +48,23 @@ export default function Posts() {
           likes: 0,
           comments: [],
           timestamp: new Date().toISOString(),
-          type: 'post', // keep as post type
         }));
 
-        // Deduplicate against existing posts
         const existingIds = new Set(posts.map((p) => p.id));
         const uniqueNew = newPosts.filter((p: any) => !existingIds.has(p.id));
-
         if (uniqueNew.length === 0) {
           setHasMore(false);
           return;
         }
 
-        // Append to local state
         setPosts((prev) => [...prev, ...uniqueNew]);
 
-        // Save to DB (merge with existing posts)
+        // Save to DB
         const binData = await fetchData();
         let allPosts = binData.posts || [];
-        // Remove existing youtube_bot posts to avoid duplicates
         allPosts = allPosts.filter((p: any) => p.userId !== 'youtube_bot');
-        // Add all current youtube posts
         const allYtPosts = posts.concat(uniqueNew).filter((p: any) => p.userId === 'youtube_bot');
-        const merged = [...allPosts, ...allYtPosts];
-        await saveData({ ...binData, posts: merged });
+        await saveData({ ...binData, posts: [...allPosts, ...allYtPosts] });
 
         setNextPageToken(data.nextPageToken || null);
         setHasMore(!!data.nextPageToken);
@@ -85,15 +72,14 @@ export default function Posts() {
         setHasMore(false);
       }
     } catch (err: any) {
-      console.error('Failed to fetch shorts:', err.message);
-      setError(err.message || 'Failed to load shorts.');
+      setError(err.message);
     }
   };
 
   // Initial load
   const initialLoad = async () => {
     setLoading(true);
-    await loadUserPosts();
+    await loadShorts();
     if (!hasFetched.current) {
       hasFetched.current = true;
       await fetchShorts(null);
@@ -101,7 +87,6 @@ export default function Posts() {
     setLoading(false);
   };
 
-  // Load more (infinite scroll)
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore || !nextPageToken) return;
     setLoadingMore(true);
@@ -109,113 +94,92 @@ export default function Posts() {
     setLoadingMore(false);
   }, [nextPageToken, hasMore, loadingMore]);
 
-  // IntersectionObserver for infinite scroll
   useEffect(() => {
     if (!sentinelRef.current) return;
-    if (observerRef.current) observerRef.current.disconnect();
-
-    observerRef.current = new IntersectionObserver(
+    const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && !loading && !loadingMore && hasMore) {
           loadMore();
         }
       },
-      { rootMargin: '200px', threshold: 0.1 }
+      { rootMargin: '200px' }
     );
-
-    observerRef.current.observe(sentinelRef.current);
-
-    return () => {
-      if (observerRef.current) observerRef.current.disconnect();
-    };
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
   }, [loadMore, loading, loadingMore, hasMore]);
 
-  // Initial load on mount
   useEffect(() => {
     initialLoad();
   }, []);
 
-  // Like function (if you want to keep likes)
-  const like = async (postId: string) => {
-    const data = await fetchData();
-    const posts = data.posts || [];
-    const idx = posts.findIndex((p: any) => p.id === postId);
-    if (idx === -1) return;
-    posts[idx].likes = (posts[idx].likes || 0) + 1;
-    await saveData({ ...data, posts });
-    // Update local state
-    setPosts((prev) =>
-      prev.map((p) => (p.id === postId ? { ...p, likes: p.likes + 1 } : p))
-    );
-  };
-
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[var(--bg)]">
+      <div className="flex items-center justify-center h-screen bg-black">
         <div className="animate-spin h-12 w-12 border-t-4 border-b-4 border-blue-500 rounded-full" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-black p-4 pb-24">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Shorts & Posts</h1>
-
-      {error ? (
-        <div className="text-center text-red-400">Error: {error}</div>
-      ) : posts.length === 0 ? (
+    <div className="min-h-screen bg-black pb-24">
+      <h1 className="text-2xl font-bold text-white p-4 sticky top-0 bg-black z-10">Shorts</h1>
+      {error && <p className="text-red-400 text-center p-4">{error}</p>}
+      {posts.length === 0 ? (
         <div className="flex items-center justify-center h-[60vh]">
-          <p className="text-gray-500 dark:text-gray-400 text-xl">No content yet</p>
+          <p className="text-gray-400">No shorts available</p>
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-1">
+        <div className="flex flex-col items-center gap-6 p-2">
           {posts.map((post) => (
-            <Link
-              key={post.id}
-              href={post.userId === 'youtube_bot' ? `#` : `/post/${post.id}`}
-              className="relative aspect-square bg-gray-200 dark:bg-gray-800 rounded overflow-hidden group"
-            >
-              {post.media?.startsWith('data:image') ? (
-                <Image src={post.media} alt="Post" fill className="object-cover group-hover:scale-105 transition" />
-              ) : post.media?.startsWith('data:video') ? (
-                <video
-                  src={post.media}
-                  className="w-full h-full object-cover group-hover:scale-105 transition"
-                  muted
-                  playsInline
-                  preload="metadata"
-                />
-              ) : post.media?.startsWith('http') ? (
-                <div className="relative w-full h-full">
+            <div key={post.id} className="w-full max-w-md bg-gray-900 rounded-xl overflow-hidden shadow-lg">
+              {/* Video area with loading overlay */}
+              <div className="relative aspect-video bg-black">
+                {post.media?.startsWith('http') ? (
                   <VideoEmbed url={post.media} thumbnail={post.thumbnail} />
-                </div>
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gray-700 text-gray-400 text-xs">🌐</div>
-              )}
-              {/* Like count (optional) */}
-              <div className="absolute bottom-1 right-1 bg-black/70 text-white text-xs px-2 py-0.5 rounded flex items-center gap-1">
-                <FaHeart className="text-red-400" size={10} /> {post.likes || 0}
+                ) : post.media?.startsWith('data:video') ? (
+                  <video
+                    src={post.media}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="w-full h-full object-cover"
+                    poster={post.thumbnail || ''}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-gray-500">
+                    No video
+                  </div>
+                )}
+                {/* Loading spinner (will be shown while video buffers) – we handle it inside VideoEmbed */}
               </div>
-              {/* Optional: comment count */}
-              {(post.comments?.length || 0) > 0 && (
-                <div className="absolute bottom-1 left-1 bg-black/70 text-white text-xs px-2 py-0.5 rounded flex items-center gap-1">
-                  <FaComment size={10} /> {post.comments.length}
+              {/* Text & actions */}
+              <div className="p-3">
+                {post.text && <p className="text-white text-sm mb-2">{post.text}</p>}
+                <div className="flex items-center gap-4 text-gray-400">
+                  <button className="flex items-center gap-1 hover:text-red-500 transition">
+                    <FaHeart /> <span>{post.likes || 0}</span>
+                  </button>
+                  <span className="flex items-center gap-1">
+                    <FaComment /> <span>{post.comments?.length || 0}</span>
+                  </span>
+                  <button className="flex items-center gap-1 hover:text-blue-400 transition">
+                    <FaShare />
+                  </button>
                 </div>
-              )}
-            </Link>
+              </div>
+            </div>
           ))}
+          {/* Sentinel for infinite scroll */}
+          <div ref={sentinelRef} className="h-10 flex items-center justify-center">
+            {loadingMore && (
+              <div className="animate-spin h-6 w-6 border-t-2 border-b-2 border-blue-500 rounded-full" />
+            )}
+            {!hasMore && !loadingMore && (
+              <p className="text-gray-500 text-xs">No more shorts</p>
+            )}
+          </div>
         </div>
       )}
-
-      {/* Sentinel for infinite scroll */}
-      <div ref={sentinelRef} className="h-10 flex items-center justify-center">
-        {loadingMore && (
-          <div className="animate-spin h-6 w-6 border-t-2 border-b-2 border-blue-500 rounded-full" />
-        )}
-        {!hasMore && !loadingMore && posts.length > 0 && (
-          <p className="text-xs text-gray-400 dark:text-gray-500">No more shorts</p>
-        )}
-      </div>
     </div>
   );
-    }
+          }
