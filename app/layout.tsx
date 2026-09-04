@@ -1,48 +1,32 @@
-'use client';
+import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
-import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { AuthProvider } from '@/context/AuthContext';
 import BottomNav from '@/components/BottomNav';
-import { useState, useEffect } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import ClientLayout from './ClientLayout';
 
 const inter = Inter({ subsets: ['latin'] });
 
-function AppContent({ children }: { children: React.ReactNode }) {
-  const { loading } = useAuth();
-  const [showLoader, setShowLoader] = useState(true);
+export const metadata: Metadata = {
+  title: 'Chat Up',
+  description: 'Chat with friends and share moments',
+};
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (!loading) setShowLoader(false);
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, [loading]);
+// We need a client component wrapper to access auth context
+// Let's create a separate ClientLayout component.
+// For simplicity, I'll modify the layout to use a client wrapper.
 
-  if (loading || showLoader) {
-    return (
-      <div className="flex flex-col items-center justify-between h-screen bg-[#1a1a1a] py-12">
-        <div className="flex-1 flex flex-col items-center justify-center">
-          <div className="animate-spin h-16 w-16 border-t-4 border-b-4 border-blue-500 rounded-full mb-6"></div>
-          <h1 className="text-3xl font-bold text-white">Chat Up</h1>
-        </div>
-        <p className="text-gray-400 text-sm text-center pb-8">
-          created by <span className="text-blue-400">Crypty</span> &amp; assisted by <span className="text-purple-400">Mole</span>
-        </p>
-      </div>
-    );
-  }
-  return children;
-}
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
-      <body className={`${inter.className} bg-[var(--bg)] text-[var(--text)] max-w-md mx-auto pb-20`}>
+      <body className={inter.className}>
         <AuthProvider>
-          <AppContent>
-            {children}
-            <BottomNav />
-          </AppContent>
+          <ClientLayout>{children}</ClientLayout>
         </AuthProvider>
       </body>
     </html>
