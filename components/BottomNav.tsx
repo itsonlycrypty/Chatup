@@ -1,24 +1,34 @@
 'use client';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { FaHome, FaImages, FaComments, FaUser } from 'react-icons/fa';
+import { usePathname, useRouter } from 'next/navigation';
+import { FaComment, FaUser, FaCog } from 'react-icons/fa';
 
 export default function BottomNav() {
-  const path = usePathname();
-  const links = [
-    { href: '/feed', icon: FaHome, label: 'Home' },
-    { href: '/posts', icon: FaImages, label: 'Posts' }, // renamed
-    { href: '/chat', icon: FaComments, label: 'Chat' },
-    { href: '/profile', icon: FaUser, label: 'Profile' },
+  const pathname = usePathname();
+  const router = useRouter();
+
+  const tabs = [
+    { name: 'Chat', icon: FaComment, path: '/chat' },
+    { name: 'Profile', icon: FaUser, path: '/profile' },
+    { name: 'Settings', icon: FaCog, path: '/settings' },
   ];
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 flex justify-around items-center py-2 px-2 max-w-md mx-auto z-50">
-      {links.map(({ href, icon: Icon, label }) => (
-        <Link key={href} href={href} className="flex flex-col items-center">
-          <Icon size={22} className={path === href ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500'} />
-          <span className={`text-[10px] mt-0.5 ${path === href ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500'}`}>{label}</span>
-        </Link>
-      ))}
-    </nav>
+    <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-black border-t border-gray-200 dark:border-gray-800 flex justify-around items-center py-2 z-50">
+      {tabs.map(({ name, icon: Icon, path }) => {
+        const isActive = pathname === path || pathname.startsWith(path + '/');
+        return (
+          <button
+            key={name}
+            onClick={() => router.push(path)}
+            className={`flex flex-col items-center gap-0.5 text-xs ${
+              isActive ? 'text-blue-500 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            <Icon size={22} />
+            <span>{name}</span>
+          </button>
+        );
+      })}
+    </div>
   );
-}
+                }
