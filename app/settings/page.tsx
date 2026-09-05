@@ -7,11 +7,10 @@ import Image from 'next/image';
 import { fetchData, saveData } from '@/lib/db';
 
 export default function Settings() {
-  const { user, loading, updateUser } = useAuth();
+  const { user, loading, updateUser, logout } = useAuth(); // ✅ added logout
   const router = useRouter();
 
   const [editData, setEditData] = useState<any>({});
-  const [showEdit, setShowEdit] = useState(false);
   const [loadingSave, setLoadingSave] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
@@ -36,7 +35,6 @@ export default function Settings() {
   const saveEdit = async () => {
     setLoadingSave(true);
     try {
-      // Check username uniqueness
       const data = await fetchData();
       const users = data.users || [];
       const existing = users.find((u: any) => u.username === editData.username && u.id !== user.id);
@@ -96,7 +94,6 @@ export default function Settings() {
 
   return (
     <div className="min-h-screen bg-[var(--bg)] pb-24">
-      {/* Header */}
       <div className="flex items-center justify-between p-4 bg-[var(--bg)] border-b border-[var(--border)] sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <button onClick={() => router.back()} className="text-[var(--text)] hover:text-gray-400">
@@ -276,4 +273,4 @@ export default function Settings() {
       </div>
     </div>
   );
-}
+        }
