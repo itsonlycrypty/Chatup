@@ -1,347 +1,253 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import Link from 'next/link';
-import { FaUserCircle, FaSearch, FaRobot, FaCheckCircle, FaPlus, FaShare, FaUser, FaUsers, FaUserPlus, FaChalkboardTeacher } from 'react-icons/fa';
+import { fetchData } from '@/lib/db';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { fetchData, saveData } from '@/lib/db';
-import { getAllAIs, PREDEFINED_AI_LIST } from '@/lib/aiData';
+import { FaSearch, FaComment, FaUser, FaPlus, FaCheck } from 'react-icons/fa';
 
 export default function ChatList() {
-  const { user, followUser } = useAuth();
-  const [items, setItems] = useState<any[]>([]);
-  const [filtered, setFiltered] = useState<any[]>([]);
-  const [query, setQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'all' | 'users' | 'ai' | 'groups' | 'channels'>('all');
+  const { user, allUsers } = useAuth();
+  const router = useRouter();
+  const [chats, setChats] = useState<any[]>([]);
   const [stories, setStories] = useState<any[]>([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  // Load stories from followed users
-  useEffect(() => {
-    const loadStories = async () => {
-      if (!user) return;
-      const data = await fetchData();
-      const allStories = data.stories || [];
-      const now = new Date().getTime();
-      const following = user.following || [];
-      const relevantUsers = [...following, user.id];
-      const validStories = allStories.filter((s: any) => {
-        const expires = new Date(s.expiresAt).getTime();
-        return relevantUsers.includes(s.userId) && expires > now;
-      });
-      const storyMap = new Map();
-      validStories.forEach((s: any) => {
-        if (!storyMap.has(s.userId) || new Date(s.timestamp).getTime() > new Date(storyMap.get(s.userId).timestamp).getTime()) {
-          storyMap.set(s.userId, s);
-        }
-      });
-      const storyList = Array.from(storyMap.values());
-      const users = data.users || [];
-      const storyWithUsers = storyList.map((s: any) => {
-        const u = users.find((usr: any) => usr.id === s.userId);
-        return { ...s, user: u };
-      });
-      setStories(storyWithUsers);
-    };
-    loadStories();
-  }, [user]);
+  const getChatId = (a: string, b: string) => [a, b].sort().join('_');
 
-  // Load chats (users, AIs, groups, channels)
-  useEffect(() => {
-    const load = async () => {
-      if (!user) return;
-      const data = await fetchData();
-      const realUsers = data.users || [];
-      const others = realUsers.filter((u: any) => u.id !== user.id);
-      const allAIs = await getAllAIs();
-      const aiFollowers = data.aiFollowers || {};
-      const aiList = allAIs.map(ai => {
-        const followers = aiFollowers[ai.id] || [];
-        return {
-          id: ai.id,
-          email: ai.name,
-          displayName: ai.name,
-          username: ai.username,
-          photoURL: ai.avatar,
-          isAI: true,
-          isOfficial: ai.isOfficial || false,
-          isCustom: ai.isCustom || false,
-          speciality: ai.speciality,
-          followers: followers,
-          isFollowing: followers.includes(user.id),
-        };
+  const load = async () => {
+    if (!user) return;
+    const data = await fetchData();
+    const users = data.users || [];
+    const groups = data.groups || [];
+    const allChats = data.chats || {};
+    const allStories = data.stories || [];
+    const now = new Date().getTime();
+
+    // Build chat list: one entry per other user & each group
+    const list: any[] = [];
+
+    // Individual users
+    users.forEach((u: any) => {
+      if (u.id === user.id) return;
+      const key = getChatId(user.id, u.id);
+      const msgs = allChats[key] || [];
+      const last = msgs[msgs.length - 1];
+      list.push({
+        id: u.id,
+        type: 'user',
+        name: u.displayName || u.username || u.phone,
+        username: u.username,
+        photoURL: u.photoURL,
+        lastMessage: last?.text || '',
+        lastTime: last?.timestamp || null,
+        unread: msgs.filter((m: any) => m.senderId !== user.id && !m.read).length,
+        isVerified: u.isVerified,
       });
-      const groups = (data.groups || []).map((g: any) => ({
+    });
+
+    // Groups
+    groups.forEach((g: any) => {
+      if (!g.members?.includes(user.id)) return;
+      const msgs = allChats[g.id] || [];
+      const last = msgs[msgs.length - 1];
+      list.push({
         id: g.id,
-        displayName: g.name,
-        username: g.name,
+        type: 'group',
+        name: g.name,
         photoURL: g.picture,
-        isGroup: true,
-        members: g.members,
-      }));
-      const channels = (data.channels || []).map((c: any) => ({
-        id: c.id,
-        displayName: c.name,
-        username: c.name,
-        photoURL: c.picture,
-        isChannel: true,
-        members: c.members,
-        admins: c.admins,
-        owner: c.owner,
-        onlyAdminsCanSend: c.onlyAdminsCanSend || false,
-      }));
-      const all = [...others, ...aiList, ...groups, ...channels];
-      setItems(all);
-      setFiltered(all);
-    };
+        lastMessage: last?.text || 'Group created',
+        lastTime: last?.timestamp || null,
+        unread: 0,
+      });
+    });
+
+    // Sort by last time desc
+    list.sort((a, b) => {
+      const ta = a.lastTime ? new Date(a.lastTime).getTime() : 0;
+      const tb = b.lastTime ? new Date(b.lastTime).getTime() : 0;
+      return tb - ta;
+    });
+
+    setChats(list);
+
+    // Stories
+    const validStories = allStories
+      .filter((s: any) => new Date(s.expiresAt).getTime() > now)
+      .map((s: any) => {
+        const owner = users.find((u: any) => u.id === s.userId);
+        return { ...s, owner };
+      });
+    setStories(validStories);
+    setLoading(false);
+  };
+
+  useEffect(() => {
     load();
+    const interval = setInterval(load, 5000);
+    return () => clearInterval(interval);
   }, [user]);
 
-  // Filter by tab and search
-  useEffect(() => {
-    let itemsFiltered = items;
-    if (activeTab === 'users') itemsFiltered = itemsFiltered.filter((u: any) => !u.isAI && !u.isGroup && !u.isChannel);
-    if (activeTab === 'ai') itemsFiltered = itemsFiltered.filter((u: any) => u.isAI);
-    if (activeTab === 'groups') itemsFiltered = itemsFiltered.filter((u: any) => u.isGroup);
-    if (activeTab === 'channels') itemsFiltered = itemsFiltered.filter((u: any) => u.isChannel);
-    if (query.trim()) {
-      itemsFiltered = itemsFiltered.filter((u: any) =>
-        u.displayName?.toLowerCase().includes(query.toLowerCase()) ||
-        u.username?.toLowerCase().includes(query.toLowerCase()) ||
-        u.email?.toLowerCase().includes(query.toLowerCase())
-      );
-    }
-    setFiltered(itemsFiltered);
-  }, [query, items, activeTab]);
+  const filtered = chats.filter((c) =>
+    c.name?.toLowerCase().includes(search.toLowerCase()) ||
+    c.username?.toLowerCase().includes(search.toLowerCase())
+  );
 
-  // Follow AI
-  const followAI = async (aiId: string) => {
-    if (!user) return;
-    const data = await fetchData();
-    const aiFollowers = data.aiFollowers || {};
-    if (!aiFollowers[aiId]) aiFollowers[aiId] = [];
-    if (!aiFollowers[aiId].includes(user.id)) {
-      aiFollowers[aiId].push(user.id);
-      await saveData({ ...data, aiFollowers });
-      // Refresh list
-      const allAIs = await getAllAIs();
-      const updatedAiList = allAIs.map(ai => ({
-        ...ai,
-        followers: aiFollowers[ai.id] || [],
-        isFollowing: (aiFollowers[ai.id] || []).includes(user.id),
-      }));
-      setItems(prev => prev.map(item => {
-        if (item.isAI && item.id === aiId) {
-          const ai = updatedAiList.find(a => a.id === aiId);
-          return { ...item, followers: ai?.followers || [], isFollowing: ai?.isFollowing || false };
-        }
-        return item;
-      }));
-    }
+  const formatTime = (ts: string | null) => {
+    if (!ts) return '';
+    const d = new Date(ts);
+    const now = new Date();
+    const sameDay = d.toDateString() === now.toDateString();
+    if (sameDay) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
   };
 
-  // Unfollow AI
-  const unfollowAI = async (aiId: string) => {
-    if (!user) return;
-    const data = await fetchData();
-    const aiFollowers = data.aiFollowers || {};
-    if (aiFollowers[aiId]) {
-      aiFollowers[aiId] = aiFollowers[aiId].filter((id: string) => id !== user.id);
-      await saveData({ ...data, aiFollowers });
-      // Refresh list
-      const allAIs = await getAllAIs();
-      const updatedAiList = allAIs.map(ai => ({
-        ...ai,
-        followers: aiFollowers[ai.id] || [],
-        isFollowing: (aiFollowers[ai.id] || []).includes(user.id),
-      }));
-      setItems(prev => prev.map(item => {
-        if (item.isAI && item.id === aiId) {
-          const ai = updatedAiList.find(a => a.id === aiId);
-          return { ...item, followers: ai?.followers || [], isFollowing: ai?.isFollowing || false };
-        }
-        return item;
-      }));
-    }
-  };
-
-  const generateInviteLink = () => {
-    const baseUrl = window.location.origin;
-    const link = `${baseUrl}/?ref=${user?.id || ''}`;
-    if (navigator.share) {
-      navigator.share({
-        title: 'Join me on Chat Up!',
-        text: 'Install Chat Up and connect with me!',
-        url: link,
-      }).catch(() => {});
-    } else {
-      navigator.clipboard?.writeText(link).then(() => {
-        alert('Invite link copied to clipboard!');
-      });
-    }
-  };
+  if (loading) {
+    return (
+      <div className="h-screen bg-[#0e1621] flex items-center justify-center">
+        <div className="animate-spin h-10 w-10 border-t-2 border-b-2 border-[#5288c1] rounded-full" />
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-black p-4 pb-24">
-      {/* Stories row */}
-      {stories.length > 0 && (
-        <div className="flex items-center gap-3 overflow-x-auto scrollbar-hide pb-3 mb-2 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex-shrink-0 text-center">
-            <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-pink-500 to-yellow-500 p-0.5">
-              <div className="w-full h-full rounded-full bg-gray-900 flex items-center justify-center text-white font-bold">
-                <FaPlus size={20} />
-              </div>
-            </div>
-            <p className="text-xs text-gray-500 mt-1">Your Story</p>
-          </div>
-          {stories.map((story) => (
-            <div key={story.id} className="flex-shrink-0 text-center cursor-pointer">
-              <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-pink-500 to-yellow-500 p-0.5">
-                <div className="w-full h-full rounded-full bg-gray-800 overflow-hidden">
-                  {story.user?.photoURL ? (
-                    <Image src={story.user.photoURL} alt="Story" width={56} height={56} className="w-full h-full object-cover" />
-                  ) : (
-                    <FaUserCircle size={56} className="text-gray-400" />
-                  )}
-                </div>
-              </div>
-              <p className="text-xs text-gray-500 mt-1 truncate w-14">{story.user?.displayName || 'User'}</p>
-            </div>
-          ))}
-        </div>
-      )}
+    <div className="min-h-screen bg-[#0e1621] pb-20">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 pt-5 pb-3">
+        <h1 className="text-3xl font-bold text-white">Chat Up</h1>
+        <button className="text-[#7f91a4]">
+          <svg width="4" height="20" viewBox="0 0 4 20" fill="currentColor">
+            <circle cx="2" cy="2" r="2" />
+            <circle cx="2" cy="10" r="2" />
+            <circle cx="2" cy="18" r="2" />
+          </svg>
+        </button>
+      </div>
 
-      {/* Top Bar */}
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Chats</h1>
-        <div className="flex gap-2">
-          <button
-            onClick={generateInviteLink}
-            className="bg-green-600 hover:bg-green-700 text-white p-2 rounded-full transition"
-            title="Invite"
-          >
-            <FaShare size={18} />
+      {/* Stories row */}
+      <div className="flex items-start gap-4 px-4 pb-4 overflow-x-auto scrollbar-hide">
+        {/* My Story */}
+        <button
+          onClick={() => router.push('/profile')}
+          className="flex flex-col items-center flex-shrink-0"
+        >
+          <div className="relative w-16 h-16 rounded-full overflow-hidden bg-[#232e3c] border-2 border-transparent">
+            {user?.photoURL ? (
+              <Image src={user.photoURL} alt="Me" fill className="object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-xl text-white">
+                {(user?.displayName || 'U')[0].toUpperCase()}
+              </div>
+            )}
+            <div className="absolute bottom-0 right-0 bg-[#5288c1] rounded-full p-1 border-2 border-[#0e1621]">
+              <FaPlus size={10} className="text-white" />
+            </div>
+          </div>
+          <span className="text-[11px] text-[#7f91a4] mt-1">My Story</span>
+        </button>
+
+        {/* Other stories */}
+        {stories.map((s, i) => (
+          <button key={i} className="flex flex-col items-center flex-shrink-0">
+            <div className="w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr from-[#5288c1] to-[#2f6ea8]">
+              <div className="w-full h-full rounded-full overflow-hidden bg-[#232e3c] border-2 border-[#0e1621]">
+                {s.owner?.photoURL ? (
+                  <Image src={s.owner.photoURL} alt="Story" width={64} height={64} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-lg text-white">
+                    {(s.owner?.displayName || 'U')[0].toUpperCase()}
+                  </div>
+                )}
+              </div>
+            </div>
+            <span className="text-[11px] text-[#7f91a4] mt-1 truncate max-w-[64px]">
+              {s.owner?.displayName || 'User'}
+            </span>
           </button>
-          <Link href="/chat/create-group" className="bg-purple-600 hover:bg-purple-700 text-white p-2 rounded-full transition" title="Create Group">
-            <FaUserPlus size={18} />
-          </Link>
-          <Link href="/channel/create" className="bg-yellow-600 hover:bg-yellow-700 text-white p-2 rounded-full transition" title="Create Channel">
-            <FaChalkboardTeacher size={18} />
-          </Link>
-          <Link href="/chat/create-ai" className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full transition">
-            <FaPlus size={18} />
-          </Link>
-        </div>
+        ))}
       </div>
 
       {/* Search */}
-      <div className="relative mb-4">
-        <FaSearch className="absolute left-3 top-3 text-gray-400 dark:text-gray-500" />
-        <input
-          className="w-full bg-white dark:bg-gray-800 text-gray-900 dark:text-white pl-10 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="Search..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
+      <div className="px-4 pb-2">
+        <div className="relative">
+          <FaSearch className="absolute left-3 top-3 text-[#7f91a4]" size={14} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search chats"
+            className="w-full bg-[#232e3c] text-white pl-9 pr-3 py-2 rounded-xl text-sm focus:outline-none placeholder-[#7f91a4]"
+          />
+        </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 mb-4 flex-wrap">
-        <button
-          onClick={() => setActiveTab('all')}
-          className={`px-4 py-2 rounded-full text-sm font-semibold transition ${activeTab === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
-        >
-          All
-        </button>
-        <button
-          onClick={() => setActiveTab('users')}
-          className={`px-4 py-2 rounded-full text-sm font-semibold transition ${activeTab === 'users' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
-        >
-          Users
-        </button>
-        <button
-          onClick={() => setActiveTab('ai')}
-          className={`px-4 py-2 rounded-full text-sm font-semibold transition ${activeTab === 'ai' ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
-        >
-          AI
-        </button>
-        <button
-          onClick={() => setActiveTab('groups')}
-          className={`px-4 py-2 rounded-full text-sm font-semibold transition ${activeTab === 'groups' ? 'bg-green-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
-        >
-          Groups
-        </button>
-        <button
-          onClick={() => setActiveTab('channels')}
-          className={`px-4 py-2 rounded-full text-sm font-semibold transition ${activeTab === 'channels' ? 'bg-yellow-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
-        >
-          Channels
-        </button>
+      {/* Archived row */}
+      <div
+        onClick={() => {}}
+        className="flex items-center gap-3 px-4 py-3 hover:bg-[#17212b] cursor-pointer"
+      >
+        <div className="w-12 h-12 rounded-full bg-[#232e3c] flex items-center justify-center">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="#7f91a4">
+            <path d="M20.54 5.23l-1.39-1.68A1.5 1.5 0 0 0 18 3H6c-.47 0-.88.21-1.15.55L3.46 5.23A1.5 1.5 0 0 0 3 6.24V19a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6.24c0-.37-.1-.71-.26-1.01zM12 17L6.5 11.5l1.42-1.42L12 14.17l4.08-4.09 1.42 1.42L12 17z"/>
+          </svg>
+        </div>
+        <div className="flex-1">
+          <p className="text-white font-medium text-[15px]">Archived Chats</p>
+          <p className="text-[#7f91a4] text-xs">Hidden conversations</p>
+        </div>
       </div>
 
-      {/* List */}
-      {filtered.length === 0 ? (
-        <p className="text-gray-500 dark:text-gray-400 text-center mt-10">{query ? 'No results' : 'No chats'}</p>
-      ) : (
-        filtered.map((u) => {
-          const isAI = u.isAI;
-          const isFollowing = u.isFollowing || false;
-          const followerCount = u.followers?.length || 0;
-          return (
-            <div key={u.id} className="flex items-center gap-4 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 p-4 rounded-2xl mb-3 transition shadow-sm">
-              {u.photoURL ? (
-                <Image src={u.photoURL} alt="Avatar" width={40} height={40} className="w-10 h-10 rounded-full object-cover" />
-              ) : u.isGroup ? (
-                <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white font-bold">G</div>
-              ) : u.isChannel ? (
-                <div className="w-10 h-10 rounded-full bg-yellow-500 flex items-center justify-center text-white font-bold">C</div>
-              ) : (
-                <FaUserCircle size={40} className="text-gray-400" />
-              )}
-              <div className="flex-1">
-                <p className="text-gray-900 dark:text-white font-semibold flex items-center gap-1">
-                  {u.displayName || u.email || u.name}
-                  {isAI && <FaRobot className="text-blue-400 text-sm" title="AI Assistant" />}
-                  {u.isOfficial && <FaCheckCircle className="text-blue-500 text-sm" title="Verified Official AI" />}
-                  {u.isCustom && <span className="text-xs bg-green-600/30 text-green-300 px-2 py-0.5 rounded-full">Custom</span>}
-                  {u.isGroup && <span className="text-xs bg-purple-600/30 text-purple-300 px-2 py-0.5 rounded-full">Group</span>}
-                  {u.isChannel && <span className="text-xs bg-yellow-600/30 text-yellow-300 px-2 py-0.5 rounded-full">Channel</span>}
-                </p>
-                <p className="text-gray-500 dark:text-gray-400 text-sm">
-                  {isAI ? `🤖 ${u.speciality || 'AI'} • ${followerCount} followers` : u.isGroup ? `${u.members?.length || 0} members` : u.isChannel ? `${u.members?.length || 0} members` : `@${u.username || ''}`}
-                </p>
+      {/* Chat list */}
+      <div>
+        {filtered.length === 0 ? (
+          <p className="text-center text-[#7f91a4] py-10">No chats yet</p>
+        ) : (
+          filtered.map((c) => (
+            <div
+              key={c.id}
+              onClick={() => router.push(`/chat/${c.id}`)}
+              className="flex items-center gap-3 px-4 py-3 hover:bg-[#17212b] cursor-pointer active:bg-[#1c2733]"
+            >
+              <div className="relative flex-shrink-0">
+                {c.photoURL ? (
+                  <Image src={c.photoURL} alt="" width={52} height={52} className="w-13 h-13 rounded-full object-cover" />
+                ) : (
+                  <div className={`w-13 h-13 w-[52px] h-[52px] rounded-full flex items-center justify-center text-white font-bold text-lg ${c.type === 'group' ? 'bg-[#5288c1]' : 'bg-[#2f6ea8]'}`}>
+                    {c.name?.[0]?.toUpperCase() || '?'}
+                  </div>
+                )}
               </div>
-              {isAI ? (
-                <div className="flex items-center gap-2">
-                  {!isFollowing ? (
-                    <button
-                      onClick={() => followAI(u.id)}
-                      className="text-xs bg-blue-600 text-white px-3 py-1 rounded-full hover:bg-blue-700"
-                    >
-                      Follow
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => unfollowAI(u.id)}
-                      className="text-xs bg-gray-600 text-white px-3 py-1 rounded-full hover:bg-gray-700"
-                    >
-                      Following
-                    </button>
-                  )}
-                  {isFollowing && (
-                    <Link href={`/chat/${u.id}`} className="text-xs bg-green-600 text-white px-3 py-1 rounded-full hover:bg-green-700">
-                      Chat
-                    </Link>
+              <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-baseline">
+                  <p className="text-white font-semibold text-[15px] truncate">
+                    {c.name}
+                    {c.isVerified && <span className="ml-1 text-[#5288c1] text-xs">✓</span>}
+                  </p>
+                  <span className="text-[#7f91a4] text-xs ml-2 flex-shrink-0">{formatTime(c.lastTime)}</span>
+                </div>
+                <div className="flex justify-between items-center mt-0.5">
+                  <p className="text-[#7f91a4] text-[13px] truncate">
+                    {c.lastMessage || 'No messages yet'}
+                  </p>
+                  {c.unread > 0 && (
+                    <span className="ml-2 bg-[#5288c1] text-white text-[11px] font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5">
+                      {c.unread}
+                    </span>
                   )}
                 </div>
-              ) : (
-                <Link href={u.isGroup ? `/chat/${u.id}` : `/chat/${u.id}`} className="text-xs bg-blue-600 text-white px-3 py-1 rounded-full hover:bg-blue-700">
-                  Chat
-                </Link>
-              )}
+              </div>
             </div>
-          );
-        })
-      )}
+          ))
+        )}
+      </div>
+
+      {/* Floating new chat button */}
+      <button
+        onClick={() => router.push('/contacts')}
+        className="fixed bottom-24 right-5 w-14 h-14 rounded-full bg-[#5288c1] flex items-center justify-center shadow-lg z-40"
+      >
+        <FaComment size={22} className="text-white" />
+      </button>
     </div>
   );
-            }
+    }
