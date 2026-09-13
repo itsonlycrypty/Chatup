@@ -1,88 +1,75 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { FaArrowLeft, FaCamera, FaTimes, FaTrash } from 'react-icons/fa';
 import Image from 'next/image';
 import { fetchData, saveData } from '@/lib/db';
+import {
+  FaUser, FaComment, FaLock, FaBell, FaDatabase, FaFolder, FaLaptop,
+  FaBatteryHalf, FaGlobe, FaCamera, FaChevronRight, FaArrowLeft, FaTrash, FaSignOutAlt
+} from 'react-icons/fa';
 
 export default function Settings() {
-  const { user, loading, updateUser, logout } = useAuth(); // ✅ added logout
+  const { user, loading, logout } = useAuth();
   const router = useRouter();
+  const [view, setView] = useState<'menu' | 'account'>('menu');
 
-  const [editData, setEditData] = useState<any>({});
-  const [loadingSave, setLoadingSave] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const bgInputRef = useRef<HTMLInputElement>(null);
+  // account edit state
+  const [displayName, setDisplayName] = useState('');
+  const [username, setUsername] = useState('');
+  const [bio, setBio] = useState('');
+  const [phone, setPhone] = useState('');
+  const [photoURL, setPhotoURL] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (user) {
-      setEditData({
-        displayName: user.displayName || '',
-        username: user.username || '',
-        bio: user.bio || '',
-        phone: user.phone || '',
-        email: user.email || '',
-        pin: user.pin || '',
-        photoURL: user.photoURL || '',
-        chatBackground: user.chatBackground || '',
-        chatBackgroundPreview: user.chatBackground || '',
-        privacy: user.privacy || { stories: 'everyone', posts: 'everyone' },
-      });
+      setDisplayName(user.displayName || '');
+      setUsername(user.username || '');
+      setBio(user.bio || '');
+      setPhone(user.phone || '');
+      setPhotoURL(user.photoURL || '');
     }
   }, [user]);
 
-  const saveEdit = async () => {
-    setLoadingSave(true);
+  const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setPhotoURL(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const saveAccount = async () => {
+    setSaving(true);
     try {
       const data = await fetchData();
       const users = data.users || [];
-      const existing = users.find((u: any) => u.username === editData.username && u.id !== user.id);
+      const existing = users.find((u: any) => u.username === username && u.id !== user.id);
       if (existing) {
-        alert('Username already taken. Please choose another.');
-        setLoadingSave(false);
+        alert('Username already taken.');
+        setSaving(false);
         return;
       }
-      await updateUser({ ...user, ...editData });
-      alert('Profile updated successfully!');
+      const idx = users.findIndex((u: any) => u.id === user.id);
+      if (idx !== -1) {
+        users[idx] = { ...users[idx], displayName, username, bio, phone, photoURL };
+        await saveData({ ...data, users });
+        // update local user
+        const updated = { ...user, displayName, username, bio, phone, photoURL };
+        localStorage.setItem('user', JSON.stringify(updated));
+        alert('Profile updated!');
+      }
     } catch (err) {
-      alert('Error updating profile.');
+      alert('Failed to save');
     }
-    setLoadingSave(false);
-  };
-
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const dataUrl = ev.target?.result as string;
-        setEditData({ ...editData, photoURL: dataUrl });
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleBgChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const dataUrl = ev.target?.result as string;
-        setEditData({ ...editData, chatBackground: dataUrl, chatBackgroundPreview: dataUrl });
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const removeBg = () => {
-    setEditData({ ...editData, chatBackground: '', chatBackgroundPreview: '' });
+    setSaving(false);
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[var(--bg)]">
-        <div className="animate-spin h-12 w-12 border-t-2 border-b-2 border-blue-500 rounded-full" />
+      <div className="h-screen bg-[#0e1621] flex items-center justify-center">
+        <div className="animate-spin h-10 w-10 border-t-2 border-b-2 border-[#5288c1] rounded-full" />
       </div>
     );
   }
@@ -92,185 +79,188 @@ export default function Settings() {
     return null;
   }
 
-  return (
-    <div className="min-h-screen bg-[var(--bg)] pb-24">
-      <div className="flex items-center justify-between p-4 bg-[var(--bg)] border-b border-[var(--border)] sticky top-0 z-10">
-        <div className="flex items-center gap-3">
-          <button onClick={() => router.back()} className="text-[var(--text)] hover:text-gray-400">
+  // ---------- ACCOUNT EDIT VIEW ----------
+  if (view === 'account') {
+    return (
+      <div className="min-h-screen bg-[#0e1621] pb-24">
+        <div className="flex items-center gap-4 px-4 pt-5 pb-3">
+          <button onClick={() => setView('menu')} className="text-[#7f91a4]">
             <FaArrowLeft size={20} />
           </button>
-          <h1 className="text-2xl font-bold text-[var(--text)]">Settings</h1>
+          <h1 className="text-xl font-bold text-white flex-1">Account</h1>
+          <button
+            onClick={saveAccount}
+            disabled={saving}
+            className="text-[#5288c1] font-medium text-sm disabled:opacity-50"
+          >
+            {saving ? 'Saving...' : 'Save'}
+          </button>
         </div>
-        <button
-          onClick={saveEdit}
-          disabled={loadingSave}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 rounded-full text-sm disabled:opacity-50"
-        >
-          {loadingSave ? 'Saving...' : 'Save'}
-        </button>
-      </div>
 
-      <div className="p-4 space-y-6">
-        {/* Profile Picture */}
-        <div className="flex flex-col items-center">
-          <div className="relative w-24 h-24 rounded-full bg-gray-700 overflow-hidden">
-            {editData.photoURL ? (
-              <Image src={editData.photoURL} alt="Profile" width={96} height={96} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-4xl bg-gray-600 text-white">
-                {editData.displayName?.[0]?.toUpperCase() || 'U'}
-              </div>
-            )}
-            <label className="absolute bottom-0 right-0 bg-blue-600 rounded-full p-1.5 cursor-pointer border-2 border-black">
-              <FaCamera className="text-white text-xs" />
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handlePhotoChange}
-              />
+        <div className="flex flex-col items-center mt-4">
+          <div className="relative">
+            <div className="w-24 h-24 rounded-full overflow-hidden bg-[#232e3c]">
+              {photoURL ? (
+                <Image src={photoURL} alt="Profile" width={96} height={96} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-3xl text-white bg-[#2f6ea8]">
+                  {(displayName || 'U')[0].toUpperCase()}
+                </div>
+              )}
+            </div>
+            <label className="absolute bottom-0 right-0 w-9 h-9 rounded-full bg-[#5288c1] border-4 border-[#0e1621] flex items-center justify-center cursor-pointer">
+              <FaCamera size={14} className="text-white" />
+              <input type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
             </label>
           </div>
-          <p className="text-gray-500 text-xs mt-1">Tap camera to change photo</p>
         </div>
 
-        {/* Form Fields */}
-        <div>
-          <label className="text-gray-400 text-sm block mb-1">Name</label>
-          <input
-            className="w-full bg-gray-800 text-white p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={editData.displayName || ''}
-            onChange={(e) => setEditData({ ...editData, displayName: e.target.value })}
-          />
-        </div>
-        <div>
-          <label className="text-gray-400 text-sm block mb-1">Username</label>
-          <input
-            className="w-full bg-gray-800 text-white p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={editData.username || ''}
-            onChange={(e) => setEditData({ ...editData, username: e.target.value })}
-          />
-        </div>
-        <div>
-          <label className="text-gray-400 text-sm block mb-1">Bio</label>
-          <textarea
-            className="w-full bg-gray-800 text-white p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-            rows={3}
-            value={editData.bio || ''}
-            onChange={(e) => setEditData({ ...editData, bio: e.target.value })}
-          />
-        </div>
-        <div>
-          <label className="text-gray-400 text-sm block mb-1">Phone Number</label>
-          <input
-            className="w-full bg-gray-800 text-white p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={editData.phone || ''}
-            onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
-          />
-        </div>
-        <div>
-          <label className="text-gray-400 text-sm block mb-1">Email</label>
-          <input
-            className="w-full bg-gray-800 text-white p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={editData.email || ''}
-            onChange={(e) => setEditData({ ...editData, email: e.target.value })}
-          />
-        </div>
-        <div>
-          <label className="text-gray-400 text-sm block mb-1">Recovery PIN (4 digits)</label>
-          <input
-            className="w-full bg-gray-800 text-white p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="4-digit PIN"
-            type="password"
-            maxLength={4}
-            value={editData.pin || ''}
-            onChange={(e) => setEditData({ ...editData, pin: e.target.value.replace(/\D/g, '').slice(0, 4) })}
-          />
-        </div>
-
-        {/* Chat Background */}
-        <div>
-          <label className="text-gray-400 text-sm block mb-1">Chat Background</label>
-          <div className="flex items-center gap-2">
-            {editData.chatBackgroundPreview ? (
-              <div className="w-16 h-16 rounded border border-gray-600 overflow-hidden flex-shrink-0">
-                <Image src={editData.chatBackgroundPreview} alt="Bg" width={64} height={64} className="object-cover" />
-              </div>
-            ) : (
-              <div className="w-16 h-16 rounded border border-gray-600 flex items-center justify-center text-gray-500 text-xs">None</div>
-            )}
-            <label className="cursor-pointer bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-xl text-sm transition">
-              Choose Image
-              <input
-                ref={bgInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleBgChange}
-              />
-            </label>
-            <button
-              onClick={removeBg}
-              className="text-red-400 hover:text-red-300 text-sm"
-            >
-              <FaTimes />
-            </button>
+        <div className="mx-4 mt-6 bg-[#17212b] rounded-2xl px-4 divide-y divide-[#0e1621]">
+          <div className="py-3">
+            <label className="text-[#7f91a4] text-xs">Name</label>
+            <input
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              className="w-full bg-transparent text-white text-[15px] focus:outline-none mt-1"
+            />
           </div>
-          <p className="text-gray-500 text-xs mt-1">Select an image to use as chat background (non‑AI chats)</p>
-        </div>
-
-        {/* Privacy Settings */}
-        <div className="border-t border-gray-700 pt-4">
-          <h3 className="text-white font-semibold mb-2">Privacy</h3>
-          <div className="flex justify-between items-center">
-            <span className="text-white">Story Visibility</span>
-            <select
-              className="bg-gray-700 text-white rounded p-1"
-              value={editData.privacy?.stories || 'everyone'}
-              onChange={(e) => setEditData({ ...editData, privacy: { ...editData.privacy, stories: e.target.value } })}
-            >
-              <option value="everyone">Everyone</option>
-              <option value="friends">Friends</option>
-              <option value="selected">Selected</option>
-              <option value="nobody">Nobody</option>
-            </select>
+          <div className="py-3">
+            <label className="text-[#7f91a4] text-xs">Username</label>
+            <input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full bg-transparent text-white text-[15px] focus:outline-none mt-1"
+            />
           </div>
-          <div className="flex justify-between items-center mt-2">
-            <span className="text-white">Post Visibility</span>
-            <select
-              className="bg-gray-700 text-white rounded p-1"
-              value={editData.privacy?.posts || 'everyone'}
-              onChange={(e) => setEditData({ ...editData, privacy: { ...editData.privacy, posts: e.target.value } })}
-            >
-              <option value="everyone">Everyone</option>
-              <option value="friends">Friends</option>
-              <option value="selected">Selected</option>
-              <option value="nobody">Nobody</option>
-            </select>
+          <div className="py-3">
+            <label className="text-[#7f91a4] text-xs">Bio</label>
+            <textarea
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              rows={2}
+              className="w-full bg-transparent text-white text-[15px] focus:outline-none mt-1 resize-none"
+            />
+          </div>
+          <div className="py-3">
+            <label className="text-[#7f91a4] text-xs">Phone</label>
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full bg-transparent text-white text-[15px] focus:outline-none mt-1"
+            />
           </div>
         </div>
 
-        {/* Delete Account */}
-        <button
-          onClick={async () => {
-            if (confirm('Delete your profile permanently? All data will be lost.')) {
-              const data = await fetchData();
-              const users = data.users || [];
-              const idx = users.findIndex((u: any) => u.id === user.id);
-              if (idx !== -1) {
-                users.splice(idx, 1);
+        <div className="mx-4 mt-6">
+          <button
+            onClick={async () => {
+              if (confirm('Delete account? This cannot be undone.')) {
+                const data = await fetchData();
+                const users = (data.users || []).filter((u: any) => u.id !== user.id);
                 await saveData({ ...data, users });
                 logout();
                 router.push('/');
               }
-            }
+            }}
+            className="w-full bg-transparent border border-red-500 text-red-500 py-3 rounded-xl font-medium"
+          >
+            <FaTrash className="inline mr-2" /> Delete Account
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------- MENU VIEW ----------
+  const menuItems = [
+    { icon: FaUser, bg: '#5288c1', title: 'Account', sub: 'Number, Username, Bio', action: () => setView('account') },
+    { icon: FaComment, bg: '#e8a33d', title: 'Chat Settings', sub: 'Wallpaper, Night Mode, Animations', action: () => {} },
+    { icon: FaLock, bg: '#4dcd5e', title: 'Privacy & Security', sub: 'Last Seen, Devices, Passkeys', action: () => {} },
+    { icon: FaBell, bg: '#e05a5a', title: 'Notifications', sub: 'Sounds, Calls, Badges', action: () => {} },
+    { icon: FaDatabase, bg: '#3a95d1', title: 'Data and Storage', sub: 'Media download settings', action: () => {} },
+    { icon: FaFolder, bg: '#3a95d1', title: 'Chat Folders', sub: 'Sort chats into folders', action: () => {} },
+    { icon: FaLaptop, bg: '#3abdd1', title: 'Devices', sub: 'Manage connected devices', action: () => {} },
+    { icon: FaBatteryHalf, bg: '#e88a3d', title: 'Power Saving', sub: 'Reduce power usage on low charge', action: () => {} },
+    { icon: FaGlobe, bg: '#a05ad1', title: 'Language', sub: 'English', action: () => {} },
+  ];
+
+  return (
+    <div className="min-h-screen bg-[#0e1621] pb-24">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 pt-5 pb-3">
+        <h1 className="text-3xl font-bold text-white">Settings</h1>
+        <button className="text-[#7f91a4]">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Profile header */}
+      <div className="flex flex-col items-center py-6">
+        <div className="relative">
+          <div className="w-24 h-24 rounded-full overflow-hidden bg-[#232e3c]">
+            {user.photoURL ? (
+              <Image src={user.photoURL} alt="Profile" width={96} height={96} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-3xl text-white bg-[#2f6ea8]">
+                {(user.displayName || 'U')[0].toUpperCase()}
+              </div>
+            )}
+          </div>
+          <div className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-[#5288c1] border-4 border-[#0e1621] flex items-center justify-center">
+            <FaCamera size={12} className="text-white" />
+          </div>
+        </div>
+        <h2 className="text-white text-xl font-bold mt-3">
+          {user.displayName || user.username || 'User'}
+        </h2>
+        <p className="text-[#7f91a4] text-sm">
+          {user.phone} {user.username && `· @${user.username}`}
+        </p>
+      </div>
+
+      {/* Menu */}
+      <div className="mx-4 bg-[#17212b] rounded-2xl overflow-hidden">
+        {menuItems.map((item, idx) => {
+          const Icon = item.icon;
+          return (
+            <button
+              key={idx}
+              onClick={item.action}
+              className="w-full flex items-center gap-4 px-4 py-3 hover:bg-[#1c2733] border-b border-[#0e1621] last:border-b-0"
+            >
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: item.bg }}
+              >
+                <Icon className="text-white" size={16} />
+              </div>
+              <div className="flex-1 text-left">
+                <p className="text-white text-[15px] font-medium">{item.title}</p>
+                <p className="text-[#7f91a4] text-xs">{item.sub}</p>
+              </div>
+              <FaChevronRight className="text-[#4a5c6e]" size={12} />
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Logout */}
+      <div className="mx-4 mt-4">
+        <button
+          onClick={() => {
+            logout();
+            router.push('/');
           }}
-          className="w-full bg-red-600 text-white py-2 rounded-xl mt-4 hover:bg-red-700 transition"
+          className="w-full flex items-center gap-4 px-4 py-3 bg-[#17212b] rounded-2xl hover:bg-[#1c2733]"
         >
-          <FaTrash className="inline mr-2" /> Delete Profile
+          <div className="w-10 h-10 rounded-full bg-[#e05a5a] flex items-center justify-center">
+            <FaSignOutAlt className="text-white" size={16} />
+          </div>
+          <span className="text-white text-[15px] font-medium flex-1 text-left">Log Out</span>
         </button>
       </div>
     </div>
   );
-        }
+      }
